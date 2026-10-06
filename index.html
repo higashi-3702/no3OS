@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="page-title">入場券配布管理システム</title>
+    <title id="page-title">入場券配布リアルタイム管理システム</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter & Noto Sans JP -->
@@ -57,9 +57,9 @@
     <!-- Notion Header Cover Banner -->
     <div class="h-28 md:h-36 w-full bg-gradient-to-r from-stone-200 via-amber-100 to-stone-300 relative border-b border-stone-200">
         <div class="max-w-4xl mx-auto h-full relative">
-            <div class="absolute bottom-3 right-4 bg-white/80 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-stone-600 shadow-sm border border-stone-200/60 flex items-center gap-1.5">
-                <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                🎫 リアルタイム複数イベント残数管理
+            <div id="sync-status-badge" class="absolute bottom-3 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-stone-700 shadow-sm border border-stone-200 flex items-center gap-1.5 transition-all">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <span>🟢 全端末リアルタイム同期中</span>
             </div>
         </div>
     </div>
@@ -94,7 +94,7 @@
                                 📌 1イベント開催
                             </span>
                             <span id="clock-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200/60">
-                                🕒 最終更新: --:--
+                                🕒 最終同期: --:--
                             </span>
                         </div>
                     </div>
@@ -112,9 +112,9 @@
 
             <!-- Description Callout -->
             <div class="notion-callout p-3.5 mt-4 flex items-start gap-3 text-stone-700 text-xs md:text-sm shadow-sm border border-stone-200/60">
-                <span class="text-base">💡</span>
+                <span class="text-base">⚡</span>
                 <div class="flex-1 leading-relaxed">
-                    コース内の各イベントごとに枚数を管理します。チケット配布時は<b>「-1」「-2」</b>、戻す時は<b>「+1」「+2」</b>を押してください。上部タブで「国際教養コース（2イベント）」など全コースを自由に切り替えできます。
+                    <b>リアルタイム同期有効:</b> ここでの変更は、Teamsや他スタッフの端末画面へ<b>瞬時に自動共有</b>されます。チケット配布時は<b>「-1」「-2」</b>を押してください。
                 </div>
             </div>
         </div>
@@ -324,8 +324,13 @@
         </div>
     </div>
 
-    <script>
-        // Default System Initial State (Supporting multi-event structure like Kokusai Liberal Arts)
+    <!-- Firebase Realtime Synchronized Engine Module Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Default Initial Course Structure
         const DEFAULT_COURSES = [
             {
                 id: 'frontier',
@@ -362,38 +367,126 @@
             }
         ];
 
-        let courses = [];
+        // Environment variables or fallback
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'ticket-dispenser-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "AIzaSyDemoKeyForTicketAppSync123456",
+                authDomain: "ticket-app.firebaseapp.com",
+                projectId: "ticket-app-demo",
+                storageBucket: "ticket-app.appspot.com",
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abcdef123456"
+            };
+
+        let db = null;
+        let auth = null;
+        let stateDocRef = null;
+        let courses = JSON.parse(JSON.stringify(DEFAULT_COURSES));
         let activeCourseId = 'frontier';
 
-        // Page Initialization
-        window.onload = function() {
-            loadFromStorage();
-            renderTabs();
-            updateUI();
-            updateClock();
-            setInterval(updateClock, 10000);
-        };
+        // Initialize Firebase & Firestore Connection
+        async function initSync() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
 
-        // Update Clock Badge
-        function updateClock() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-            const clockBadgeEl = document.getElementById('clock-badge');
-            if (clockBadgeEl) {
-                clockBadgeEl.textContent = `🕒 最終更新: ${timeStr}`;
+                let userCred = null;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        userCred = await signInWithCustomToken(auth, __initial_auth_token);
+                    } catch(e) {
+                        userCred = await signInAnonymously(auth);
+                    }
+                } else {
+                    userCred = await signInAnonymously(auth);
+                }
+
+                if (userCred && userCred.user) {
+                    stateDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'ticket_system', 'main_state');
+                    subscribeRealtime();
+                } else {
+                    fallbackLocal();
+                }
+            } catch(e) {
+                console.warn("Firebase connect fallback to local storage:", e);
+                fallbackLocal();
             }
         }
 
-        // Change Ticket Count for Specific Event
+        function subscribeRealtime() {
+            onSnapshot(stateDocRef, (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data && data.courses && Array.isArray(data.courses) && data.courses.length > 0) {
+                        courses = data.courses;
+                        if (data.activeCourseId && courses.some(c => c.id === data.activeCourseId)) {
+                            activeCourseId = data.activeCourseId;
+                        }
+                    }
+                } else {
+                    // Initialize first data copy in Firestore
+                    saveStateToFirestore();
+                }
+                updateSyncBadge(true);
+                updateUI();
+                updateClock();
+            }, (err) => {
+                console.error("Realtime sync error:", err);
+                updateSyncBadge(false);
+                fallbackLocal();
+            });
+        }
+
+        function saveStateToFirestore() {
+            if (stateDocRef) {
+                setDoc(stateDocRef, {
+                    courses: courses,
+                    activeCourseId: activeCourseId,
+                    lastUpdated: Date.now()
+                }, { merge: true }).catch(err => {
+                    console.error("Firestore write error:", err);
+                });
+            }
+            try {
+                localStorage.setItem('notion_multi_course_v2_data', JSON.stringify(courses));
+                localStorage.setItem('notion_active_course_v2_id', activeCourseId);
+            } catch(e) {}
+        }
+
+        function fallbackLocal() {
+            try {
+                const savedCourses = localStorage.getItem('notion_multi_course_v2_data');
+                const savedActiveId = localStorage.getItem('notion_active_course_v2_id');
+                if (savedCourses) courses = JSON.parse(savedCourses);
+                if (savedActiveId && courses.some(c => c.id === savedActiveId)) activeCourseId = savedActiveId;
+            } catch(e) {}
+            updateSyncBadge(false);
+            updateUI();
+            updateClock();
+        }
+
+        function updateSyncBadge(isLive) {
+            const badge = document.getElementById('sync-status-badge');
+            if (!badge) return;
+            if (isLive) {
+                badge.className = "absolute bottom-3 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-emerald-800 shadow-sm border border-emerald-200 flex items-center gap-1.5 transition-all";
+                badge.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span><span>🟢 全端末リアルタイム同期中</span>`;
+            } else {
+                badge.className = "absolute bottom-3 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-amber-800 shadow-sm border border-amber-200 flex items-center gap-1.5 transition-all";
+                badge.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500"></span><span>🟡 スタンドアロン動作中</span>`;
+            }
+        }
+
+        // Change Ticket Count Logic
         function changeRemaining(eventId, delta) {
             let targetEvent = null;
-            let targetCourse = null;
-
             for (const c of courses) {
                 const ev = c.events.find(e => e.id === eventId);
                 if (ev) {
                     targetEvent = ev;
-                    targetCourse = c;
                     break;
                 }
             }
@@ -402,31 +495,27 @@
 
             const nextVal = targetEvent.remaining + delta;
 
-            // Guard 1: Cannot go below 0
             if (nextVal < 0) {
                 showWarning(`⚠️ 「${targetEvent.name}」は完売のため配布できません`);
                 return;
             }
 
-            // Guard 2: Cannot exceed total capacity
             if (nextVal > targetEvent.total) {
                 showWarning(`⚠️ 総枚数 (${targetEvent.total}枚) を超えて戻すことはできません`);
                 return;
             }
 
             targetEvent.remaining = nextVal;
-            saveToStorage();
+            saveStateToFirestore();
             updateUI();
             updateClock();
 
-            // Mobile Haptic Feedback
             if (navigator.vibrate) {
                 navigator.vibrate(35);
             }
         }
 
         function showWarning(msg) {
-            // Temporary banner toast or warning highlight
             const activeWarnEl = document.getElementById('global-warning-toast');
             if (activeWarnEl) activeWarnEl.remove();
 
@@ -441,30 +530,13 @@
             }, 2500);
         }
 
-        // Main Refresh Function
-        function updateUI() {
-            const activeCourse = courses.find(c => c.id === activeCourseId) || courses[0];
-            if (!activeCourse) return;
-
-            activeCourseId = activeCourse.id;
-
-            // Header elements update
-            document.getElementById('course-emoji-display').textContent = activeCourse.emoji;
-            document.getElementById('course-name-display').textContent = activeCourse.name;
-            document.getElementById('tag-event-badge').textContent = `📌 ${activeCourse.events.length}イベント開催`;
-            document.getElementById('page-title').textContent = `${activeCourse.name} - 入場券配布システム`;
-
-            // Delete course button state
-            const deleteBtn = document.getElementById('delete-course-btn');
-            if (courses.length <= 1) {
-                deleteBtn.classList.add('hidden');
-            } else {
-                deleteBtn.classList.remove('hidden');
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const clockBadgeEl = document.getElementById('clock-badge');
+            if (clockBadgeEl) {
+                clockBadgeEl.textContent = `🕒 最終同期: ${timeStr}`;
             }
-
-            renderTabs();
-            renderActiveEvents();
-            renderSummaryTable();
         }
 
         // Render Active Course Events Layout
@@ -472,19 +544,18 @@
             const container = document.getElementById('active-events-container');
             container.innerHTML = '';
 
-            const activeCourse = courses.find(c => c.id === activeCourseId);
+            const activeCourse = courses.find(c => c.id === activeCourseId) || courses[0];
             if (!activeCourse) return;
 
             const isMultiEvent = activeCourse.events.length > 1;
 
-            // Apply responsive grid layout depending on number of events
             if (isMultiEvent) {
                 container.className = "grid grid-cols-1 md:grid-cols-2 gap-6 mb-8";
             } else {
                 container.className = "space-y-6 mb-8";
             }
 
-            activeCourse.events.forEach((event, index) => {
+            activeCourse.events.forEach((event) => {
                 const distributed = event.total - event.remaining;
                 const percent = event.total > 0 ? Math.round((distributed / event.total) * 100) : 0;
                 const isSoldOut = event.remaining === 0;
@@ -493,7 +564,6 @@
                 eventCard.className = `notion-card rounded-2xl p-5 md:p-6 text-center relative overflow-hidden flex flex-col justify-between ${isSoldOut ? 'border-rose-300' : ''}`;
 
                 eventCard.innerHTML = `
-                    <!-- Sold Out Overlay Banner -->
                     ${isSoldOut ? `
                     <div class="absolute top-0 left-0 right-0 bg-rose-600 text-white font-bold text-xs py-1 shadow-sm uppercase tracking-wider sold-out-badge z-20">
                         🎉 配布完了！完売しました
@@ -501,7 +571,6 @@
                     ` : ''}
 
                     <div>
-                        <!-- Event Header Title & Actions -->
                         <div class="flex items-center justify-between gap-2 border-b border-stone-100 pb-3 mb-3 mt-1">
                             <div class="flex items-center gap-1.5 text-left">
                                 <span class="text-xs font-bold px-2 py-0.5 rounded ${isSoldOut ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
@@ -525,7 +594,6 @@
                             <span class="text-[11px] font-semibold uppercase tracking-wider text-stone-400">現在の残り枚数</span>
                         </div>
                         
-                        <!-- Big Countdown Number -->
                         <div class="flex items-baseline justify-center gap-1.5 my-1">
                             <span class="text-6xl ${isMultiEvent ? 'md:text-7xl' : 'md:text-8xl'} font-black ${isSoldOut ? 'text-rose-600' : 'text-stone-800'} tracking-tight leading-none">
                                 ${event.remaining}
@@ -533,18 +601,15 @@
                             <span class="text-xl font-bold text-stone-500">枚</span>
                         </div>
 
-                        <!-- Sub Counter -->
                         <div class="text-xs font-medium text-stone-500 mb-3">
                             配布済み: <span class="font-bold text-stone-800 text-sm">${distributed}</span> / <span>${event.total}</span> 枚
                         </div>
 
-                        <!-- Progress Bar -->
                         <div class="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden border border-stone-200/60 mb-4">
                             <div class="bg-stone-800 h-full rounded-full transition-all duration-300" style="width: ${percent}%"></div>
                         </div>
                     </div>
 
-                    <!-- Touch Control Buttons -->
                     <div>
                         <div class="grid grid-cols-2 ${isMultiEvent ? 'gap-2' : 'gap-3 md:grid-cols-4'} mt-2">
                             <button onclick="changeRemaining('${event.id}', -1)" class="notion-btn py-3.5 px-2 bg-stone-900 hover:bg-black text-white rounded-xl font-bold shadow-sm flex flex-col items-center">
@@ -584,6 +649,7 @@
         // Render Tabs Navigation
         function renderTabs() {
             const tabsContainer = document.getElementById('course-tabs-container');
+            if (!tabsContainer) return;
             tabsContainer.innerHTML = '';
 
             courses.forEach(course => {
@@ -592,10 +658,10 @@
                 
                 tabBtn.onclick = () => {
                     activeCourseId = course.id;
+                    saveStateToFirestore();
                     updateUI();
                 };
 
-                // Calculate total remaining across course events
                 const totalRemaining = course.events.reduce((sum, e) => sum + e.remaining, 0);
                 const isAllSoldOut = totalRemaining === 0;
 
@@ -614,7 +680,6 @@
                 tabsContainer.appendChild(tabBtn);
             });
 
-            // Add New Course Button
             const addBtn = document.createElement('button');
             addBtn.onclick = openAddCourseModal;
             addBtn.className = "notion-btn flex items-center gap-1 px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-stone-500 hover:text-stone-800 hover:bg-stone-100 whitespace-nowrap border border-dashed border-stone-300 ml-1";
@@ -622,9 +687,10 @@
             tabsContainer.appendChild(addBtn);
         }
 
-        // Render All Courses & Events Summary Table
+        // Render All Summary Table
         function renderSummaryTable() {
             const tableBody = document.getElementById('summary-table-body');
+            if (!tableBody) return;
             tableBody.innerHTML = '';
 
             let grandTotalDistributed = 0;
@@ -687,80 +753,91 @@
                 });
             });
 
-            // Update Total Summary Badge
             document.getElementById('total-summary-badge').textContent = `全体合計: 配布 ${grandTotalDistributed} / ${grandTotalCapacity} 枚`;
         }
 
-        function switchAndScroll(courseId) {
+        function updateUI() {
+            const activeCourse = courses.find(c => c.id === activeCourseId) || courses[0];
+            if (!activeCourse) return;
+
+            activeCourseId = activeCourse.id;
+
+            document.getElementById('course-emoji-display').textContent = activeCourse.emoji;
+            document.getElementById('course-name-display').textContent = activeCourse.name;
+            document.getElementById('tag-event-badge').textContent = `📌 ${activeCourse.events.length}イベント開催`;
+            document.getElementById('page-title').textContent = `${activeCourse.name} - 入場券配布システム`;
+
+            const deleteBtn = document.getElementById('delete-course-btn');
+            if (courses.length <= 1) {
+                deleteBtn.classList.add('hidden');
+            } else {
+                deleteBtn.classList.remove('hidden');
+            }
+
+            renderTabs();
+            renderActiveEvents();
+            renderSummaryTable();
+        }
+
+        // Modal Handlers & Exposed Scope Window Assignments
+        window.switchAndScroll = (courseId) => {
             activeCourseId = courseId;
+            saveStateToFirestore();
             updateUI();
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        };
 
-        // Course Modal Handlers
-        function openCourseModal() {
+        window.openCourseModal = () => {
             const course = courses.find(c => c.id === activeCourseId);
             if (!course) return;
-
             document.getElementById('modal-course-emoji-input').value = course.emoji;
             document.getElementById('modal-course-name-input').value = course.name;
-
             document.getElementById('course-modal').classList.remove('hidden');
-        }
+        };
 
-        function closeCourseModal() {
+        window.closeCourseModal = () => {
             document.getElementById('course-modal').classList.add('hidden');
-        }
+        };
 
-        function saveCourseSettings() {
+        window.saveCourseSettings = () => {
             const course = courses.find(c => c.id === activeCourseId);
             if (!course) return;
-
             const newEmoji = document.getElementById('modal-course-emoji-input').value.trim() || '🎫';
             const newName = document.getElementById('modal-course-name-input').value.trim();
 
             if (newName) {
                 course.emoji = newEmoji;
                 course.name = newName;
-
-                saveToStorage();
+                saveStateToFirestore();
                 updateUI();
                 closeCourseModal();
             }
-        }
+        };
 
-        // Event Settings Modal
-        function openEventModal(eventId) {
+        window.openEventModal = (eventId) => {
             let foundEvent = null;
             for (const c of courses) {
                 const ev = c.events.find(e => e.id === eventId);
-                if (ev) {
-                    foundEvent = ev;
-                    break;
-                }
+                if (ev) { foundEvent = ev; break; }
             }
             if (!foundEvent) return;
 
             document.getElementById('modal-event-id-hidden').value = foundEvent.id;
             document.getElementById('modal-event-name-input').value = foundEvent.name;
             document.getElementById('modal-event-total-input').value = foundEvent.total;
-
             document.getElementById('event-modal').classList.remove('hidden');
-        }
+        };
 
-        function closeEventModal() {
+        window.closeEventModal = () => {
             document.getElementById('event-modal').classList.add('hidden');
-        }
+        };
 
-        function saveEventSettings() {
+        window.saveEventSettings = () => {
             const eventId = document.getElementById('modal-event-id-hidden').value;
             let foundEvent = null;
             for (const c of courses) {
                 const ev = c.events.find(e => e.id === eventId);
-                if (ev) {
-                    foundEvent = ev;
-                    break;
-                }
+                if (ev) { foundEvent = ev; break; }
             }
             if (!foundEvent) return;
 
@@ -773,90 +850,80 @@
                 foundEvent.total = newTotal;
                 foundEvent.remaining = Math.max(0, Math.min(foundEvent.total, foundEvent.remaining + diff));
 
-                saveToStorage();
+                saveStateToFirestore();
                 updateUI();
                 closeEventModal();
             }
-        }
+        };
 
-        // Add Sub-Event Modal
-        function openAddEventModal() {
+        window.openAddEventModal = () => {
             document.getElementById('add-event-name-input').value = '';
             document.getElementById('add-event-total-input').value = 300;
             document.getElementById('add-event-modal').classList.remove('hidden');
-        }
+        };
 
-        function closeAddEventModal() {
+        window.closeAddEventModal = () => {
             document.getElementById('add-event-modal').classList.add('hidden');
-        }
+        };
 
-        function confirmAddEvent() {
+        window.confirmAddEvent = () => {
             const course = courses.find(c => c.id === activeCourseId);
             if (!course) return;
 
             const name = document.getElementById('add-event-name-input').value.trim() || `イベント ${course.events.length + 1}`;
             const total = parseInt(document.getElementById('add-event-total-input').value, 10) || 300;
 
-            const newEvent = {
+            course.events.push({
                 id: 'ev_' + Date.now(),
                 name: name,
                 total: total,
                 remaining: total
-            };
+            });
 
-            course.events.push(newEvent);
-
-            saveToStorage();
+            saveStateToFirestore();
             updateUI();
             closeAddEventModal();
-        }
+        };
 
-        // Add Course Modal
-        function openAddCourseModal() {
+        window.openAddCourseModal = () => {
             document.getElementById('add-course-emoji-input').value = '🎓';
             document.getElementById('add-course-name-input').value = '';
             document.getElementById('add-course-total-input').value = 300;
             document.getElementById('add-course-modal').classList.remove('hidden');
-        }
+        };
 
-        function closeAddCourseModal() {
+        window.closeAddCourseModal = () => {
             document.getElementById('add-course-modal').classList.add('hidden');
-        }
+        };
 
-        function confirmAddCourse() {
+        window.confirmAddCourse = () => {
             const emoji = document.getElementById('add-course-emoji-input').value.trim() || '📌';
             const name = document.getElementById('add-course-name-input').value.trim();
             const total = parseInt(document.getElementById('add-course-total-input').value, 10) || 300;
 
             if (name) {
                 const newCourseId = 'course_' + Date.now();
-                const newCourse = {
+                courses.push({
                     id: newCourseId,
                     name: name,
                     emoji: emoji,
                     events: [
                         { id: newCourseId + '_ev1', name: name, total: total, remaining: total }
                     ]
-                };
-
-                courses.push(newCourse);
+                });
                 activeCourseId = newCourseId;
 
-                saveToStorage();
+                saveStateToFirestore();
                 updateUI();
                 closeAddCourseModal();
             }
-        }
+        };
 
-        // Reset Event Modal
-        function openResetModal(eventId) {
+        window.openResetModal = (eventId) => {
             let foundEvent = null;
             for (const c of courses) {
                 const ev = c.events.find(e => e.id === eventId);
-                if (ev) {
-                    foundEvent = ev;
-                    break;
-                }
+                if (ev) { foundEvent = ev; break; }
             }
             if (!foundEvent) return;
 
@@ -864,13 +931,13 @@
             document.getElementById('reset-event-name').textContent = foundEvent.name;
             document.getElementById('reset-modal-total').textContent = foundEvent.total;
             document.getElementById('reset-modal').classList.remove('hidden');
-        }
+        };
 
-        function closeResetModal() {
+        window.closeResetModal = () => {
             document.getElementById('reset-modal').classList.add('hidden');
-        }
+        };
 
-        function confirmResetEvent() {
+        window.confirmResetEvent = () => {
             const eventId = document.getElementById('reset-event-id-hidden').value;
             for (const c of courses) {
                 const ev = c.events.find(e => e.id === eventId);
@@ -879,100 +946,70 @@
                     break;
                 }
             }
-            saveToStorage();
+            saveStateToFirestore();
             updateUI();
             closeResetModal();
-        }
+        };
 
-        // Delete Sub-Event Modal
-        function openDeleteEventModal(eventId) {
+        window.openDeleteEventModal = (eventId) => {
             let foundEvent = null;
             for (const c of courses) {
                 const ev = c.events.find(e => e.id === eventId);
-                if (ev) {
-                    foundEvent = ev;
-                    break;
-                }
+                if (ev) { foundEvent = ev; break; }
             }
             if (!foundEvent) return;
 
             document.getElementById('delete-event-id-hidden').value = foundEvent.id;
             document.getElementById('delete-event-name').textContent = foundEvent.name;
             document.getElementById('delete-event-modal').classList.remove('hidden');
-        }
+        };
 
-        function closeDeleteEventModal() {
+        window.closeDeleteEventModal = () => {
             document.getElementById('delete-event-modal').classList.add('hidden');
-        }
+        };
 
-        function confirmDeleteEvent() {
+        window.confirmDeleteEvent = () => {
             const eventId = document.getElementById('delete-event-id-hidden').value;
             const course = courses.find(c => c.id === activeCourseId);
 
             if (course && course.events.length > 1) {
                 course.events = course.events.filter(e => e.id !== eventId);
-                saveToStorage();
+                saveStateToFirestore();
                 updateUI();
                 closeDeleteEventModal();
             }
-        }
+        };
 
-        // Delete Whole Course Modal
-        function openDeleteCourseModal() {
+        window.openDeleteCourseModal = () => {
             const course = courses.find(c => c.id === activeCourseId);
             if (!course) return;
 
             document.getElementById('delete-course-name').textContent = `${course.emoji} ${course.name}`;
             document.getElementById('delete-course-modal').classList.remove('hidden');
-        }
+        };
 
-        function closeDeleteCourseModal() {
+        window.closeDeleteCourseModal = () => {
             document.getElementById('delete-course-modal').classList.add('hidden');
-        }
+        };
 
-        function confirmDeleteCourse() {
+        window.confirmDeleteCourse = () => {
             if (courses.length <= 1) return;
 
             courses = courses.filter(c => c.id !== activeCourseId);
             activeCourseId = courses[0].id;
 
-            saveToStorage();
+            saveStateToFirestore();
             updateUI();
             closeDeleteCourseModal();
-        }
+        };
 
-        // LocalStorage Sync
-        function saveToStorage() {
-            try {
-                localStorage.setItem('notion_multi_course_v2_data', JSON.stringify(courses));
-                localStorage.setItem('notion_active_course_v2_id', activeCourseId);
-            } catch(e) {
-                console.error("LocalStorage save error:", e);
-            }
-        }
+        window.changeRemaining = changeRemaining;
 
-        function loadFromStorage() {
-            try {
-                const savedCourses = localStorage.getItem('notion_multi_course_v2_data');
-                const savedActiveId = localStorage.getItem('notion_active_course_v2_id');
-
-                if (savedCourses) {
-                    courses = JSON.parse(savedCourses);
-                } else {
-                    courses = JSON.parse(JSON.stringify(DEFAULT_COURSES));
-                }
-
-                if (savedActiveId && courses.some(c => c.id === savedActiveId)) {
-                    activeCourseId = savedActiveId;
-                } else if (courses.length > 0) {
-                    activeCourseId = courses[0].id;
-                }
-            } catch(e) {
-                console.error("LocalStorage load error:", e);
-                courses = JSON.parse(JSON.stringify(DEFAULT_COURSES));
-                activeCourseId = 'frontier';
-            }
-        }
+        // Start initialization on window load
+        window.addEventListener('DOMContentLoaded', () => {
+            initSync();
+            setInterval(updateClock, 10000);
+        });
     </script>
 </body>
 </html>
