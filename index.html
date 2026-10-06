@@ -14,7 +14,7 @@
     <style>
         body {
             font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: #fcfbf9;
+            background-color: #f7f6f3;
             color: #37352f;
         }
         /* Notion aesthetic custom styles */
@@ -42,7 +42,6 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.65; }
         }
-        /* Custom scrollbar for tab navigation */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -55,17 +54,36 @@
 <body class="min-h-screen pb-16">
 
     <!-- Notion Header Cover Banner -->
-    <div class="h-28 md:h-36 w-full bg-gradient-to-r from-stone-200 via-amber-100 to-stone-300 relative border-b border-stone-200">
-        <div class="max-w-4xl mx-auto h-full relative">
-            <div id="sync-status-badge" class="absolute bottom-3 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-stone-700 shadow-sm border border-stone-200 flex items-center gap-1.5 transition-all">
-                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                <span>🟢 全端末リアルタイム同期中</span>
+    <div class="h-28 md:h-32 w-full bg-gradient-to-r from-stone-200 via-amber-100 to-stone-300 relative border-b border-stone-200/80">
+        <div class="max-w-4xl mx-auto h-full relative px-4 flex items-end justify-between pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-3xl select-none">🎟️</span>
+                <span class="font-black text-stone-800 text-lg md:text-xl tracking-tight drop-shadow-sm">入場券配布管理システム</span>
+            </div>
+            <!-- Sync Status Badge -->
+            <div id="sync-status-badge" class="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-stone-700 shadow-sm border border-stone-200/80 flex items-center gap-1.5">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span>🟡 ローカル動作中 (未連携)</span>
             </div>
         </div>
     </div>
 
     <!-- Main Container -->
-    <main class="max-w-4xl mx-auto px-4 md:px-6 -mt-8 relative z-10">
+    <main class="max-w-4xl mx-auto px-4 md:px-6 mt-4 relative z-10">
+
+        <!-- Top Controls Bar -->
+        <div class="flex items-center justify-between gap-2 mb-4 bg-white p-3 rounded-2xl notion-card">
+            <div class="flex items-center gap-2 text-xs font-semibold text-stone-600">
+                <span class="text-base">📊</span>
+                <span id="sync-mode-text">スプレッドシート連携URLを設定してください</span>
+            </div>
+            
+            <!-- GAS Settings Button -->
+            <button onclick="openGasModal()" class="notion-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm flex items-center gap-1.5 transition-colors">
+                <span>🔗</span>
+                <span>管理データ設定</span>
+            </button>
+        </div>
 
         <!-- Course Switcher Tabs -->
         <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar mb-4 p-1.5 bg-stone-200/70 backdrop-blur-md rounded-2xl border border-stone-300/60 shadow-inner" id="course-tabs-container">
@@ -80,33 +98,19 @@
                         🚀
                     </div>
                     <div>
-                        <!-- Clickable Event Title for Quick Editing -->
-                        <div class="flex items-center gap-2 group cursor-pointer my-0.5 inline-flex hover:bg-stone-100 p-1 rounded-lg transition-colors" onclick="openCourseModal()" title="クリックしてコース名を編集">
-                            <h1 id="course-name-display" class="text-2xl md:text-3xl font-extrabold text-stone-800 tracking-tight">
-                                フロンティアコース
-                            </h1>
-                            <span class="text-stone-400 group-hover:text-stone-700 text-sm transition-colors bg-stone-100 group-hover:bg-stone-200 p-1 rounded-md">✏️</span>
-                        </div>
+                        <h1 id="course-name-display" class="text-2xl md:text-3xl font-extrabold text-stone-800 tracking-tight">
+                            フロンティアコース
+                        </h1>
                         
-                        <!-- Tags / Status Badges -->
-                        <div class="flex flex-wrap items-center gap-2 text-xs text-stone-500 mt-0.5">
+                        <div class="flex flex-wrap items-center gap-2 text-xs text-stone-500 mt-1">
                             <span id="tag-event-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-stone-200/80 text-stone-700 font-medium">
                                 📌 1イベント開催
                             </span>
                             <span id="clock-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200/60">
-                                🕒 最終同期: --:--
+                                🕒 最終更新: --:--:--
                             </span>
                         </div>
                     </div>
-                </div>
-
-                <div class="flex items-center gap-2 mt-2 sm:mt-0">
-                    <button onclick="openAddEventModal()" class="notion-btn text-xs font-bold text-stone-700 hover:text-stone-900 bg-white hover:bg-stone-50 px-3 py-2 rounded-xl border border-stone-200 shadow-sm flex items-center gap-1.5">
-                        <span>➕</span> <span>サブイベント追加</span>
-                    </button>
-                    <button id="delete-course-btn" onclick="openDeleteCourseModal()" class="notion-btn text-xs font-medium text-stone-400 hover:text-rose-600 bg-stone-100 hover:bg-rose-50 px-2.5 py-2 rounded-xl border border-stone-200/80 transition-colors">
-                        🗑️ コース削除
-                    </button>
                 </div>
             </div>
 
@@ -114,12 +118,12 @@
             <div class="notion-callout p-3.5 mt-4 flex items-start gap-3 text-stone-700 text-xs md:text-sm shadow-sm border border-stone-200/60">
                 <span class="text-base">⚡</span>
                 <div class="flex-1 leading-relaxed">
-                    <b>リアルタイム同期有効:</b> ここでの変更は、Teamsや他スタッフの端末画面へ<b>瞬時に自動共有</b>されます。チケット配布時は<b>「-1」「-2」</b>を押してください。
+                    <b>リアルタイム同期有効:</b> チケット配布時は<b>「-1」「-2」</b>を押してください。管理データ（スプレッドシート）へ書き込まれ、<b>他スタッフの画面にも即座に自動反映</b>されます。
                 </div>
             </div>
         </div>
 
-        <!-- Active Course Events Container (Dynamic 1-card or Multi-card layout) -->
+        <!-- Active Course Events Container -->
         <div id="active-events-container" class="space-y-6 mb-8">
             <!-- Rendered dynamically -->
         </div>
@@ -130,7 +134,7 @@
                 <div class="flex items-center gap-2">
                     <span class="text-xl">📋</span>
                     <div>
-                        <h2 class="font-bold text-stone-800 text-base">全コース・全イベント配布状況ビュー</h2>
+                        <h2 class="font-bold text-stone-800 text-base">全コース・全イベント配布状況一覧</h2>
                         <p class="text-xs text-stone-500">一覧から直接チケットのマイナス操作（-1 / -2）が可能です</p>
                     </div>
                 </div>
@@ -162,111 +166,34 @@
 
     </main>
 
-    <!-- Modal: Edit Active Course Title -->
-    <div id="course-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="notion-card bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
-            <h3 class="font-bold text-stone-800 text-base mb-1 flex items-center gap-2">
-                ⚙ コース基本情報の編集
-            </h3>
-            <p class="text-xs text-stone-500 mb-4">コース名とアイコン絵文字を変更します。</p>
-            
-            <div class="space-y-3 mb-5 text-xs">
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">アイコン (絵文字)</label>
-                    <input type="text" id="modal-course-emoji-input" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="例: 🌐">
-                </div>
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">コース名</label>
-                    <input type="text" id="modal-course-name-input" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="例: 国際教養コース">
-                </div>
+    <!-- Modal: GAS Web App URL Settings -->
+    <div id="gas-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="notion-card bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+                <h3 class="font-extrabold text-stone-800 text-base flex items-center gap-2">
+                    <span>🔗</span> Googleスプレッドシート（管理データ）設定
+                </h3>
+                <button onclick="closeGasModal()" class="text-stone-400 hover:text-stone-600 font-bold text-sm p-1">✕</button>
             </div>
             
-            <div class="flex justify-end gap-2">
-                <button onclick="closeCourseModal()" class="px-3.5 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">キャンセル</button>
-                <button onclick="saveCourseSettings()" class="px-3.5 py-1.5 text-xs font-medium text-white bg-stone-800 hover:bg-stone-900 rounded-lg">保存する</button>
-            </div>
-        </div>
-    </div>
+            <p class="text-xs text-stone-600 mb-4 leading-relaxed">
+                Google Apps Script (GAS) の「ウェブアプリ URL」を入力することで、スプレッドシートと連動して全端末でリアルタイム同期が可能になります。
+            </p>
 
-    <!-- Modal: Edit Sub-Event Name & Capacity -->
-    <div id="event-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="notion-card bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
-            <h3 class="font-bold text-stone-800 text-base mb-1 flex items-center gap-2">
-                ✏️ イベント設定の編集
-            </h3>
-            <p class="text-xs text-stone-500 mb-4">イベント名と総チケット枚数を変更します。</p>
-            
-            <input type="hidden" id="modal-event-id-hidden">
-            <div class="space-y-3 mb-5 text-xs">
+            <div class="space-y-4 mb-6 text-xs">
                 <div>
-                    <label class="block text-stone-600 font-semibold mb-1">イベント名</label>
-                    <input type="text" id="modal-event-name-input" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="例: 第1部 (午前の部)">
+                    <label class="block text-stone-700 font-bold mb-1.5">ウェブアプリ URL (https://script.google.com/macros/s/.../exec)</label>
+                    <input type="url" id="gas-url-input" class="w-full px-3 py-2.5 border border-stone-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-600" placeholder="https://script.google.com/macros/s/AKfycbx.../exec">
                 </div>
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">総チケット枚数</label>
-                    <input type="number" id="modal-event-total-input" min="1" max="10000" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="300">
-                </div>
-            </div>
-            
-            <div class="flex justify-end gap-2">
-                <button onclick="closeEventModal()" class="px-3.5 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">キャンセル</button>
-                <button onclick="saveEventSettings()" class="px-3.5 py-1.5 text-xs font-medium text-white bg-stone-800 hover:bg-stone-900 rounded-lg">保存する</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Modal: Add Sub-Event -->
-    <div id="add-event-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="notion-card bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
-            <h3 class="font-bold text-stone-800 text-base mb-1 flex items-center gap-2">
-                ➕ サブイベントの追加
-            </h3>
-            <p class="text-xs text-stone-500 mb-4">現在のコース内に新しいイベント枠を追加します。</p>
-            
-            <div class="space-y-3 mb-5 text-xs">
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">イベント名</label>
-                    <input type="text" id="add-event-name-input" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="例: 第2部 (午後の部)">
-                </div>
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">初期総チケット枚数</label>
-                    <input type="number" id="add-event-total-input" value="300" min="1" max="10000" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="300">
+                <div class="bg-amber-50 border border-amber-200/80 rounded-xl p-3 text-amber-900 leading-relaxed text-[11px]">
+                    <b>💡 連携未設定の場合:</b> URLを空欄にして保存すると、この端末のローカルデータ（ブラウザ保存）で動作します。
                 </div>
             </div>
             
             <div class="flex justify-end gap-2">
-                <button onclick="closeAddEventModal()" class="px-3.5 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">キャンセル</button>
-                <button onclick="confirmAddEvent()" class="px-3.5 py-1.5 text-xs font-medium text-white bg-stone-800 hover:bg-stone-900 rounded-lg">追加する</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Add New Course -->
-    <div id="add-course-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="notion-card bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
-            <h3 class="font-bold text-stone-800 text-base mb-1 flex items-center gap-2">
-                ➕ 新しいコースの追加
-            </h3>
-            <p class="text-xs text-stone-500 mb-4">新しい管理対象コースを追加します。</p>
-            
-            <div class="space-y-3 mb-5 text-xs">
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">アイコン (絵文字)</label>
-                    <input type="text" id="add-course-emoji-input" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="🎓">
-                </div>
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">コース名</label>
-                    <input type="text" id="add-course-name-input" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="例: 特進コース">
-                </div>
-                <div>
-                    <label class="block text-stone-600 font-semibold mb-1">初期イベントの総枚数</label>
-                    <input type="number" id="add-course-total-input" value="300" min="1" max="10000" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-800" placeholder="300">
-                </div>
-            </div>
-            
-            <div class="flex justify-end gap-2">
-                <button onclick="closeAddCourseModal()" class="px-3.5 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">キャンセル</button>
-                <button onclick="confirmAddCourse()" class="px-3.5 py-1.5 text-xs font-medium text-white bg-stone-800 hover:bg-stone-900 rounded-lg">追加する</button>
+                <button onclick="closeGasModal()" class="px-4 py-2 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-xl">キャンセル</button>
+                <button onclick="saveGasSettings()" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm">設定を保存</button>
             </div>
         </div>
     </div>
@@ -275,7 +202,7 @@
     <div id="reset-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="notion-card bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
             <h3 class="font-bold text-rose-600 text-base mb-2 flex items-center gap-2">
-                ⚠️ リセットの確認
+                ⚠️ 枚数リセットの確認
             </h3>
             <p class="text-xs text-stone-600 mb-4">
                 「<span id="reset-event-name" class="font-bold text-stone-800"></span>」の配布枚数を初期状態（残り<span id="reset-modal-total">300</span>枚 / 配布済み0枚）に戻します。実行しますか？
@@ -289,55 +216,15 @@
         </div>
     </div>
 
-    <!-- Modal: Delete Event Confirmation -->
-    <div id="delete-event-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="notion-card bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
-            <h3 class="font-bold text-rose-600 text-base mb-2 flex items-center gap-2">
-                🗑️ イベント削除の確認
-            </h3>
-            <p class="text-xs text-stone-600 mb-4">
-                「<span id="delete-event-name" class="font-bold text-stone-800"></span>」を削除します。この操作は取り消せません。
-            </p>
-            <input type="hidden" id="delete-event-id-hidden">
-            
-            <div class="flex justify-end gap-2">
-                <button onclick="closeDeleteEventModal()" class="px-3.5 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">キャンセル</button>
-                <button onclick="confirmDeleteEvent()" class="px-3.5 py-1.5 text-xs font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg">削除する</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Delete Course Confirmation -->
-    <div id="delete-course-modal" class="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="notion-card bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
-            <h3 class="font-bold text-rose-600 text-base mb-2 flex items-center gap-2">
-                🗑️ コース全体削除の確認
-            </h3>
-            <p class="text-xs text-stone-600 mb-4">
-                「<span id="delete-course-name" class="font-bold text-stone-800"></span>」と含まれるすべてのイベントを管理リストから削除します。
-            </p>
-            
-            <div class="flex justify-end gap-2">
-                <button onclick="closeDeleteCourseModal()" class="px-3.5 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">キャンセル</button>
-                <button onclick="confirmDeleteCourse()" class="px-3.5 py-1.5 text-xs font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg">コースを削除する</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Firebase Realtime Synchronized Engine Module Script -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Default Initial Course Structure
+    <script>
+        // Default Course Data Structure
         const DEFAULT_COURSES = [
             {
                 id: 'frontier',
                 name: 'フロンティアコース',
                 emoji: '🚀',
                 events: [
-                    { id: 'frontier_ev1', name: 'フロンティアコース', total: 300, remaining: 300 }
+                    { id: 'frontier', name: 'メインイベント', total: 300, remaining: 300 }
                 ]
             },
             {
@@ -345,15 +232,15 @@
                 name: '文理共創コース',
                 emoji: '💡',
                 events: [
-                    { id: 'bunri_ev1', name: '文理共創コース', total: 300, remaining: 300 }
+                    { id: 'bunri', name: 'メインイベント', total: 300, remaining: 300 }
                 ]
             },
             {
-                id: 'ishin',
+                id: 'science',
                 name: '医進・サイエンスコース',
                 emoji: '🧬',
                 events: [
-                    { id: 'ishin_ev1', name: '医進・サイエンスコース', total: 300, remaining: 300 }
+                    { id: 'science', name: 'メインイベント', total: 300, remaining: 300 }
                 ]
             },
             {
@@ -361,130 +248,89 @@
                 name: '国際教養コース',
                 emoji: '🌐',
                 events: [
-                    { id: 'kokusai_ev1', name: '第1部 (午前の部)', total: 300, remaining: 300 },
-                    { id: 'kokusai_ev2', name: '第2部 (午後の部)', total: 300, remaining: 300 }
+                    { id: 'kokusai_1', name: '第1部 (午前の部)', total: 300, remaining: 300 },
+                    { id: 'kokusai_2', name: '第2部 (午後の部)', total: 300, remaining: 300 }
                 ]
             }
         ];
 
-        // Environment variables or fallback
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'ticket-dispenser-app';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyDemoKeyForTicketAppSync123456",
-                authDomain: "ticket-app.firebaseapp.com",
-                projectId: "ticket-app-demo",
-                storageBucket: "ticket-app.appspot.com",
-                messagingSenderId: "123456789",
-                appId: "1:123456789:web:abcdef123456"
-            };
-
-        let db = null;
-        let auth = null;
-        let stateDocRef = null;
         let courses = JSON.parse(JSON.stringify(DEFAULT_COURSES));
         let activeCourseId = 'frontier';
+        let gasUrl = localStorage.getItem('gas_app_url') || '';
+        let pollingInterval = null;
 
-        // Initialize Firebase & Firestore Connection
-        async function initSync() {
+        async function fetchFromGas() {
+            if (!gasUrl) return;
+
             try {
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
+                const res = await fetch(gasUrl);
+                if (!res.ok) throw new Error('GAS response error');
+                const data = await res.json();
+                
+                if (Array.isArray(data) && data.length > 0) {
+                    let updated = false;
+                    data.forEach(item => {
+                        courses.forEach(c => {
+                            const ev = c.events.find(e => String(e.id) === String(item.id));
+                            if (ev) {
+                                if (typeof item.total === 'number') ev.total = item.total;
+                                if (typeof item.remaining === 'number') ev.remaining = item.remaining;
+                                updated = true;
+                            }
+                        });
+                    });
 
-                let userCred = null;
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
-                        userCred = await signInWithCustomToken(auth, __initial_auth_token);
-                    } catch(e) {
-                        userCred = await signInAnonymously(auth);
+                    if (updated) {
+                        updateSyncBadge(true);
+                        updateUI();
+                        updateClock();
                     }
-                } else {
-                    userCred = await signInAnonymously(auth);
-                }
-
-                if (userCred && userCred.user) {
-                    stateDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'ticket_system', 'main_state');
-                    subscribeRealtime();
-                } else {
-                    fallbackLocal();
                 }
             } catch(e) {
-                console.warn("Firebase connect fallback to local storage:", e);
-                fallbackLocal();
-            }
-        }
-
-        function subscribeRealtime() {
-            onSnapshot(stateDocRef, (snap) => {
-                if (snap.exists()) {
-                    const data = snap.data();
-                    if (data && data.courses && Array.isArray(data.courses) && data.courses.length > 0) {
-                        courses = data.courses;
-                        if (data.activeCourseId && courses.some(c => c.id === data.activeCourseId)) {
-                            activeCourseId = data.activeCourseId;
-                        }
-                    }
-                } else {
-                    // Initialize first data copy in Firestore
-                    saveStateToFirestore();
-                }
-                updateSyncBadge(true);
-                updateUI();
-                updateClock();
-            }, (err) => {
-                console.error("Realtime sync error:", err);
+                console.warn("GAS Sync fetch error:", e);
                 updateSyncBadge(false);
-                fallbackLocal();
-            });
-        }
-
-        function saveStateToFirestore() {
-            if (stateDocRef) {
-                setDoc(stateDocRef, {
-                    courses: courses,
-                    activeCourseId: activeCourseId,
-                    lastUpdated: Date.now()
-                }, { merge: true }).catch(err => {
-                    console.error("Firestore write error:", err);
-                });
             }
-            try {
-                localStorage.setItem('notion_multi_course_v2_data', JSON.stringify(courses));
-                localStorage.setItem('notion_active_course_v2_id', activeCourseId);
-            } catch(e) {}
         }
 
-        function fallbackLocal() {
+        async function postToGas(eventId, newRemaining) {
+            if (!gasUrl) return;
+
             try {
-                const savedCourses = localStorage.getItem('notion_multi_course_v2_data');
-                const savedActiveId = localStorage.getItem('notion_active_course_v2_id');
-                if (savedCourses) courses = JSON.parse(savedCourses);
-                if (savedActiveId && courses.some(c => c.id === savedActiveId)) activeCourseId = savedActiveId;
-            } catch(e) {}
-            updateSyncBadge(false);
-            updateUI();
-            updateClock();
+                // Post update to GAS Web App endpoint
+                fetch(gasUrl, {
+                    method: 'POST',
+                    mode: 'no-cors', // For Google Apps Script Web App redirects
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: eventId, remaining: newRemaining })
+                }).catch(e => console.error("Post error:", e));
+            } catch(e) {
+                console.error("GAS Post exception:", e);
+            }
         }
 
         function updateSyncBadge(isLive) {
             const badge = document.getElementById('sync-status-badge');
-            if (!badge) return;
-            if (isLive) {
-                badge.className = "absolute bottom-3 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-emerald-800 shadow-sm border border-emerald-200 flex items-center gap-1.5 transition-all";
-                badge.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span><span>🟢 全端末リアルタイム同期中</span>`;
+            const syncText = document.getElementById('sync-mode-text');
+
+            if (!gasUrl) {
+                badge.className = "bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-amber-800 shadow-sm border border-amber-200 flex items-center gap-1.5";
+                badge.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500"></span><span>🟡 ローカル動作中 (未連携)</span>`;
+                if (syncText) syncText.textContent = "スプレッドシート連携URLを設定してください";
+            } else if (isLive) {
+                badge.className = "bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-emerald-800 shadow-sm border border-emerald-200 flex items-center gap-1.5";
+                badge.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span><span>🟢 スプレッドシート連動中</span>`;
+                if (syncText) syncText.textContent = "Googleスプレッドシート（管理データ）とリアルタイム同期中";
             } else {
-                badge.className = "absolute bottom-3 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-amber-800 shadow-sm border border-amber-200 flex items-center gap-1.5 transition-all";
-                badge.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500"></span><span>🟡 スタンドアロン動作中</span>`;
+                badge.className = "bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-rose-800 shadow-sm border border-rose-200 flex items-center gap-1.5";
+                badge.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span><span>🔴 接続確認中...</span>`;
+                if (syncText) syncText.textContent = "Googleスプレッドシートへ接続を試みています";
             }
         }
 
-        // Change Ticket Count Logic
         function changeRemaining(eventId, delta) {
             let targetEvent = null;
             for (const c of courses) {
-                const ev = c.events.find(e => e.id === eventId);
+                const ev = c.events.find(e => String(e.id) === String(eventId));
                 if (ev) {
                     targetEvent = ev;
                     break;
@@ -496,32 +342,37 @@
             const nextVal = targetEvent.remaining + delta;
 
             if (nextVal < 0) {
-                showWarning(`⚠️ 「${targetEvent.name}」は完売のため配布できません`);
+                showToast(`⚠️ 「${targetEvent.name}」は完売のため配布できません`);
                 return;
             }
 
             if (nextVal > targetEvent.total) {
-                showWarning(`⚠️ 総枚数 (${targetEvent.total}枚) を超えて戻すことはできません`);
+                showToast(`⚠️ 総枚数 (${targetEvent.total}枚) を超えて戻すことはできません`);
                 return;
             }
 
             targetEvent.remaining = nextVal;
-            saveStateToFirestore();
+            saveLocalState();
             updateUI();
             updateClock();
+
+            // Post to GAS spreadsheet
+            if (gasUrl) {
+                postToGas(targetEvent.id, nextVal);
+            }
 
             if (navigator.vibrate) {
                 navigator.vibrate(35);
             }
         }
 
-        function showWarning(msg) {
+        function showToast(msg) {
             const activeWarnEl = document.getElementById('global-warning-toast');
             if (activeWarnEl) activeWarnEl.remove();
 
             const toast = document.createElement('div');
             toast.id = 'global-warning-toast';
-            toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-xs md:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-2xl z-50 flex items-center gap-2 border border-stone-700 animate-bounce';
+            toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-xs md:text-sm font-bold px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 border border-stone-700 animate-bounce';
             toast.innerHTML = `<span>${msg}</span>`;
             document.body.appendChild(toast);
 
@@ -535,11 +386,25 @@
             const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const clockBadgeEl = document.getElementById('clock-badge');
             if (clockBadgeEl) {
-                clockBadgeEl.textContent = `🕒 最終同期: ${timeStr}`;
+                clockBadgeEl.textContent = `🕒 最終更新: ${timeStr}`;
             }
         }
 
-        // Render Active Course Events Layout
+        function saveLocalState() {
+            try {
+                localStorage.setItem('ticket_app_courses_data', JSON.stringify(courses));
+            } catch(e) {}
+        }
+
+        function loadLocalState() {
+            try {
+                const saved = localStorage.getItem('ticket_app_courses_data');
+                if (saved) {
+                    courses = JSON.parse(saved);
+                }
+            } catch(e) {}
+        }
+
         function renderActiveEvents() {
             const container = document.getElementById('active-events-container');
             container.innerHTML = '';
@@ -577,16 +442,6 @@
                                     ${isSoldOut ? '🔴 完売' : '🟢 配布中'}
                                 </span>
                                 <h3 class="font-extrabold text-stone-800 text-sm md:text-base">${event.name}</h3>
-                            </div>
-                            <div class="flex items-center gap-1">
-                                <button onclick="openEventModal('${event.id}')" title="設定" class="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-md transition-colors text-xs">
-                                    ✏️
-                                </button>
-                                ${activeCourse.events.length > 1 ? `
-                                <button onclick="openDeleteEventModal('${event.id}')" title="イベント削除" class="p-1 text-stone-300 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors text-xs">
-                                    🗑️
-                                </button>
-                                ` : ''}
                             </div>
                         </div>
 
@@ -646,7 +501,6 @@
             });
         }
 
-        // Render Tabs Navigation
         function renderTabs() {
             const tabsContainer = document.getElementById('course-tabs-container');
             if (!tabsContainer) return;
@@ -658,7 +512,6 @@
                 
                 tabBtn.onclick = () => {
                     activeCourseId = course.id;
-                    saveStateToFirestore();
                     updateUI();
                 };
 
@@ -679,15 +532,8 @@
 
                 tabsContainer.appendChild(tabBtn);
             });
-
-            const addBtn = document.createElement('button');
-            addBtn.onclick = openAddCourseModal;
-            addBtn.className = "notion-btn flex items-center gap-1 px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-stone-500 hover:text-stone-800 hover:bg-stone-100 whitespace-nowrap border border-dashed border-stone-300 ml-1";
-            addBtn.innerHTML = `<span>➕</span><span>追加</span>`;
-            tabsContainer.appendChild(addBtn);
         }
 
-        // Render All Summary Table
         function renderSummaryTable() {
             const tableBody = document.getElementById('summary-table-body');
             if (!tableBody) return;
@@ -711,7 +557,7 @@
 
                     tr.innerHTML = `
                         <td class="py-3 pr-2">
-                            <button onclick="switchAndScroll('${course.id}')" class="flex items-center gap-1.5 hover:underline text-left font-bold text-stone-800">
+                            <button onclick="switchCourse('${course.id}')" class="flex items-center gap-1.5 hover:underline text-left font-bold text-stone-800">
                                 <span>${course.emoji}</span>
                                 <span>${course.name}</span>
                                 ${course.events.length > 1 ? `<span class="text-stone-400 font-normal text-xs">/ ${event.name}</span>` : ''}
@@ -767,162 +613,46 @@
             document.getElementById('tag-event-badge').textContent = `📌 ${activeCourse.events.length}イベント開催`;
             document.getElementById('page-title').textContent = `${activeCourse.name} - 入場券配布システム`;
 
-            const deleteBtn = document.getElementById('delete-course-btn');
-            if (courses.length <= 1) {
-                deleteBtn.classList.add('hidden');
-            } else {
-                deleteBtn.classList.remove('hidden');
-            }
-
             renderTabs();
             renderActiveEvents();
             renderSummaryTable();
         }
 
-        // Modal Handlers & Exposed Scope Window Assignments
-        window.switchAndScroll = (courseId) => {
+        window.switchCourse = (courseId) => {
             activeCourseId = courseId;
-            saveStateToFirestore();
             updateUI();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
-        window.openCourseModal = () => {
-            const course = courses.find(c => c.id === activeCourseId);
-            if (!course) return;
-            document.getElementById('modal-course-emoji-input').value = course.emoji;
-            document.getElementById('modal-course-name-input').value = course.name;
-            document.getElementById('course-modal').classList.remove('hidden');
+        window.openGasModal = () => {
+            document.getElementById('gas-url-input').value = gasUrl;
+            document.getElementById('gas-modal').classList.remove('hidden');
         };
 
-        window.closeCourseModal = () => {
-            document.getElementById('course-modal').classList.add('hidden');
+        window.closeGasModal = () => {
+            document.getElementById('gas-modal').classList.add('hidden');
         };
 
-        window.saveCourseSettings = () => {
-            const course = courses.find(c => c.id === activeCourseId);
-            if (!course) return;
-            const newEmoji = document.getElementById('modal-course-emoji-input').value.trim() || '🎫';
-            const newName = document.getElementById('modal-course-name-input').value.trim();
+        window.saveGasSettings = () => {
+            const inputVal = document.getElementById('gas-url-input').value.trim();
+            gasUrl = inputVal;
+            localStorage.setItem('gas_app_url', gasUrl);
 
-            if (newName) {
-                course.emoji = newEmoji;
-                course.name = newName;
-                saveStateToFirestore();
-                updateUI();
-                closeCourseModal();
-            }
-        };
+            closeGasModal();
+            updateSyncBadge(false);
 
-        window.openEventModal = (eventId) => {
-            let foundEvent = null;
-            for (const c of courses) {
-                const ev = c.events.find(e => e.id === eventId);
-                if (ev) { foundEvent = ev; break; }
-            }
-            if (!foundEvent) return;
-
-            document.getElementById('modal-event-id-hidden').value = foundEvent.id;
-            document.getElementById('modal-event-name-input').value = foundEvent.name;
-            document.getElementById('modal-event-total-input').value = foundEvent.total;
-            document.getElementById('event-modal').classList.remove('hidden');
-        };
-
-        window.closeEventModal = () => {
-            document.getElementById('event-modal').classList.add('hidden');
-        };
-
-        window.saveEventSettings = () => {
-            const eventId = document.getElementById('modal-event-id-hidden').value;
-            let foundEvent = null;
-            for (const c of courses) {
-                const ev = c.events.find(e => e.id === eventId);
-                if (ev) { foundEvent = ev; break; }
-            }
-            if (!foundEvent) return;
-
-            const newName = document.getElementById('modal-event-name-input').value.trim();
-            const newTotal = parseInt(document.getElementById('modal-event-total-input').value, 10);
-
-            if (newName && newTotal && newTotal > 0) {
-                const diff = newTotal - foundEvent.total;
-                foundEvent.name = newName;
-                foundEvent.total = newTotal;
-                foundEvent.remaining = Math.max(0, Math.min(foundEvent.total, foundEvent.remaining + diff));
-
-                saveStateToFirestore();
-                updateUI();
-                closeEventModal();
-            }
-        };
-
-        window.openAddEventModal = () => {
-            document.getElementById('add-event-name-input').value = '';
-            document.getElementById('add-event-total-input').value = 300;
-            document.getElementById('add-event-modal').classList.remove('hidden');
-        };
-
-        window.closeAddEventModal = () => {
-            document.getElementById('add-event-modal').classList.add('hidden');
-        };
-
-        window.confirmAddEvent = () => {
-            const course = courses.find(c => c.id === activeCourseId);
-            if (!course) return;
-
-            const name = document.getElementById('add-event-name-input').value.trim() || `イベント ${course.events.length + 1}`;
-            const total = parseInt(document.getElementById('add-event-total-input').value, 10) || 300;
-
-            course.events.push({
-                id: 'ev_' + Date.now(),
-                name: name,
-                total: total,
-                remaining: total
-            });
-
-            saveStateToFirestore();
-            updateUI();
-            closeAddEventModal();
-        };
-
-        window.openAddCourseModal = () => {
-            document.getElementById('add-course-emoji-input').value = '🎓';
-            document.getElementById('add-course-name-input').value = '';
-            document.getElementById('add-course-total-input').value = 300;
-            document.getElementById('add-course-modal').classList.remove('hidden');
-        };
-
-        window.closeAddCourseModal = () => {
-            document.getElementById('add-course-modal').classList.add('hidden');
-        };
-
-        window.confirmAddCourse = () => {
-            const emoji = document.getElementById('add-course-emoji-input').value.trim() || '📌';
-            const name = document.getElementById('add-course-name-input').value.trim();
-            const total = parseInt(document.getElementById('add-course-total-input').value, 10) || 300;
-
-            if (name) {
-                const newCourseId = 'course_' + Date.now();
-                courses.push({
-                    id: newCourseId,
-                    name: name,
-                    emoji: emoji,
-                    events: [
-                        { id: newCourseId + '_ev1', name: name, total: total, remaining: total }
-                    ]
-                });
-                activeCourseId = newCourseId;
-
-                saveStateToFirestore();
-                updateUI();
-                closeAddCourseModal();
+            if (gasUrl) {
+                fetchFromGas();
+                showToast("✅ Google Apps ScriptのURLを設定しました");
+            } else {
+                showToast("ℹ️ ローカルモードで動作します");
             }
         };
 
         window.openResetModal = (eventId) => {
             let foundEvent = null;
             for (const c of courses) {
-                const ev = c.events.find(e => e.id === eventId);
+                const ev = c.events.find(e => String(e.id) === String(eventId));
                 if (ev) { foundEvent = ev; break; }
             }
             if (!foundEvent) return;
@@ -939,76 +669,38 @@
 
         window.confirmResetEvent = () => {
             const eventId = document.getElementById('reset-event-id-hidden').value;
+            let targetEvent = null;
+
             for (const c of courses) {
-                const ev = c.events.find(e => e.id === eventId);
+                const ev = c.events.find(e => String(e.id) === String(eventId));
                 if (ev) {
                     ev.remaining = ev.total;
+                    targetEvent = ev;
                     break;
                 }
             }
-            saveStateToFirestore();
+
+            saveLocalState();
             updateUI();
             closeResetModal();
-        };
 
-        window.openDeleteEventModal = (eventId) => {
-            let foundEvent = null;
-            for (const c of courses) {
-                const ev = c.events.find(e => e.id === eventId);
-                if (ev) { foundEvent = ev; break; }
-            }
-            if (!foundEvent) return;
-
-            document.getElementById('delete-event-id-hidden').value = foundEvent.id;
-            document.getElementById('delete-event-name').textContent = foundEvent.name;
-            document.getElementById('delete-event-modal').classList.remove('hidden');
-        };
-
-        window.closeDeleteEventModal = () => {
-            document.getElementById('delete-event-modal').classList.add('hidden');
-        };
-
-        window.confirmDeleteEvent = () => {
-            const eventId = document.getElementById('delete-event-id-hidden').value;
-            const course = courses.find(c => c.id === activeCourseId);
-
-            if (course && course.events.length > 1) {
-                course.events = course.events.filter(e => e.id !== eventId);
-                saveStateToFirestore();
-                updateUI();
-                closeDeleteEventModal();
+            if (targetEvent && gasUrl) {
+                postToGas(targetEvent.id, targetEvent.total);
             }
         };
 
-        window.openDeleteCourseModal = () => {
-            const course = courses.find(c => c.id === activeCourseId);
-            if (!course) return;
-
-            document.getElementById('delete-course-name').textContent = `${course.emoji} ${course.name}`;
-            document.getElementById('delete-course-modal').classList.remove('hidden');
-        };
-
-        window.closeDeleteCourseModal = () => {
-            document.getElementById('delete-course-modal').classList.add('hidden');
-        };
-
-        window.confirmDeleteCourse = () => {
-            if (courses.length <= 1) return;
-
-            courses = courses.filter(c => c.id !== activeCourseId);
-            activeCourseId = courses[0].id;
-
-            saveStateToFirestore();
-            updateUI();
-            closeDeleteCourseModal();
-        };
-
-        window.changeRemaining = changeRemaining;
-
-        // Start initialization on window load
+        // Initialize application on DOM ready
         window.addEventListener('DOMContentLoaded', () => {
-            initSync();
-            setInterval(updateClock, 10000);
+            loadLocalState();
+            updateUI();
+            updateClock();
+            updateSyncBadge(false);
+
+            if (gasUrl) {
+                fetchFromGas();
+                // Start 3-second automatic polling for real-time synchronization
+                pollingInterval = setInterval(fetchFromGas, 3000);
+            }
         });
     </script>
 </body>
