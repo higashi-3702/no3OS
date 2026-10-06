@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>入場券配布 リアルタイム管理システム</title>
+    <title>入場券配布 リアルタイム管理システム (Firebase同期版)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -11,13 +11,15 @@
     <!-- Google Fonts Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
                         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
                     },
                     colors: {
                         notion: {
@@ -38,399 +40,598 @@
         body {
             background-color: #f7f6f3;
             color: #37352f;
+            user-select: none;
+            -webkit-user-select: none;
         }
         .touch-action-none {
             touch-action: manipulation;
         }
         @keyframes pulse-subtle {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.85; transform: scale(0.98); }
         }
         .animate-pulse-subtle {
             animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1ef;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d3d3d0;
+            border-radius: 3px;
+        }
     </style>
 </head>
-<body class="min-h-screen pb-12 antialiased">
+<body class="min-h-screen pb-16 antialiased">
 
-    <!-- Header Navbar -->
-    <header class="sticky top-0 z-30 bg-[#f7f6f3]/90 backdrop-blur-md border-b border-notion-border px-4 py-3">
+    <!-- Navigation Bar -->
+    <header class="sticky top-0 z-30 bg-[#f7f6f3]/95 backdrop-blur-md border-b border-notion-border px-4 py-3 shadow-xs">
         <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-2.5">
                 <span class="text-2xl">🎫</span>
-                <h1 class="text-lg md:text-xl font-bold tracking-tight text-notion-text">入場券配布 リアルタイム管理</h1>
+                <div>
+                    <h1 class="text-base md:text-lg font-bold tracking-tight text-notion-text flex items-center gap-2">
+                        入場券配布 リアルタイム管理
+                        <span class="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">Firebase Fast-Sync</span>
+                    </h1>
+                </div>
             </div>
 
-            <div class="flex items-center space-x-2 sm:space-x-3">
+            <div class="flex items-center space-x-2">
                 <!-- Status Badge -->
-                <div id="status-badge" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700 transition-all">
-                    <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-400 mr-1.5"></span>
-                    <span id="status-text">接続設定未完了</span>
+                <div id="status-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all">
+                    <span id="status-dot" class="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+                    <span id="status-text">リアルタイム接続中</span>
                 </div>
 
-                <!-- GAS Help Modal Button -->
-                <button onclick="toggleModal('gas-script-modal')" class="inline-flex items-center px-3 py-1.5 text-xs font-medium bg-white hover:bg-gray-100 text-gray-700 border border-notion-border rounded-lg shadow-sm transition">
-                    <i class="fa-solid fa-code mr-1.5 text-purple-600"></i> GASコード
+                <!-- Room / Group Selector Button -->
+                <button onclick="openRoomModal()" class="inline-flex items-center px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-notion-border rounded-lg shadow-2xs transition">
+                    <i class="fa-solid fa-users-line mr-1.5 text-indigo-600"></i>
+                    <span id="current-room-display">ルーム: 標準</span>
                 </button>
 
-                <!-- GAS Setting Modal Button -->
-                <button onclick="toggleModal('gas-config-modal')" class="inline-flex items-center px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition">
-                    <i class="fa-solid fa-link mr-1.5"></i> 管理データ設定
+                <!-- Admin Settings Modal Trigger -->
+                <button onclick="toggleModal('admin-modal')" class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold bg-gray-800 hover:bg-black text-white rounded-lg shadow-2xs transition">
+                    <i class="fa-solid fa-gear"></i>
                 </button>
             </div>
         </div>
     </header>
 
-    <main class="max-w-5xl mx-auto px-4 pt-6 space-y-6">
+    <main class="max-w-5xl mx-auto px-4 pt-5 space-y-5">
 
-        <!-- Error Notification Banner (Hidden by default) -->
-        <div id="error-banner" class="hidden bg-rose-50 border-l-4 border-rose-500 p-4 rounded-r-lg shadow-sm">
-            <div class="flex items-start">
-                <i class="fa-solid fa-triangle-exclamation text-rose-500 mt-0.5 mr-3"></i>
-                <div class="flex-1">
-                    <h3 class="text-sm font-semibold text-rose-800">接続エラーが発生しました</h3>
-                    <p id="error-banner-msg" class="text-xs text-rose-700 mt-1">Google Apps Scriptからの応答を確認できません。</p>
-                </div>
-                <button onclick="document.getElementById('error-banner').classList.add('hidden')" class="text-rose-400 hover:text-rose-600 text-sm">
-                    <i class="fa-solid fa-xmark"></i>
+        <!-- Banner Info Toast -->
+        <div id="sync-banner" class="bg-indigo-50/80 border border-indigo-100 p-3.5 rounded-xl shadow-2xs flex items-center justify-between text-xs text-indigo-900">
+            <div class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-bolt text-amber-500 text-sm"></i>
+                <span><b>自動同期中:</b> どの端末から操作しても100ミリ秒以内にすべての画面に反影されます。</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="toggleSound()" id="sound-toggle-btn" class="px-2 py-1 bg-white border border-indigo-200 rounded font-medium hover:bg-indigo-50 transition">
+                    <i class="fa-solid fa-volume-high text-indigo-600 mr-1"></i> <span id="sound-status-text">音: ON</span>
                 </button>
             </div>
         </div>
 
         <!-- Course Selection Tabs -->
-        <div class="bg-white p-1.5 rounded-xl border border-notion-border shadow-sm flex overflow-x-auto gap-1 scrollbar-none">
+        <div class="bg-white p-1.5 rounded-xl border border-notion-border shadow-2xs flex overflow-x-auto gap-1 scrollbar-none">
             <button onclick="selectCourse('frontier')" id="tab-frontier" class="tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition whitespace-nowrap">
                 <span>🚀</span> <span>フロンティア</span>
-                <span id="badge-frontier" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono">--</span>
+                <span id="badge-frontier" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono font-bold">300</span>
             </button>
             <button onclick="selectCourse('bunri')" id="tab-bunri" class="tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition whitespace-nowrap">
                 <span>💡</span> <span>文理共創</span>
-                <span id="badge-bunri" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono">--</span>
+                <span id="badge-bunri" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono font-bold">300</span>
             </button>
             <button onclick="selectCourse('ishin')" id="tab-ishin" class="tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition whitespace-nowrap">
                 <span>🧬</span> <span>医進サイエンス</span>
-                <span id="badge-ishin" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono">--</span>
+                <span id="badge-ishin" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono font-bold">300</span>
             </button>
             <button onclick="selectCourse('kokusai_am')" id="tab-kokusai_am" class="tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition whitespace-nowrap">
                 <span>🌐</span> <span>国際教養(午前)</span>
-                <span id="badge-kokusai_am" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono">--</span>
+                <span id="badge-kokusai_am" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono font-bold">300</span>
             </button>
             <button onclick="selectCourse('kokusai_pm')" id="tab-kokusai_pm" class="tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition whitespace-nowrap">
                 <span>🌐</span> <span>国際教養(午後)</span>
-                <span id="badge-kokusai_pm" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono">--</span>
+                <span id="badge-kokusai_pm" class="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full font-mono font-bold">300</span>
             </button>
         </div>
 
         <!-- Active Event Main Dashboard Card -->
-        <div class="bg-white rounded-2xl border border-notion-border shadow-sm p-5 md:p-8 space-y-6">
+        <div class="bg-white rounded-2xl border border-notion-border shadow-2xs p-5 md:p-8 space-y-6">
             
             <!-- Header section of active course -->
             <div class="flex flex-wrap items-start justify-between gap-4 border-b border-notion-border pb-4">
                 <div>
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2.5">
                         <span id="active-icon" class="text-3xl">🚀</span>
-                        <h2 id="active-title" class="text-2xl md:text-3xl font-extrabold tracking-tight text-notion-text">フロンティアコース</h2>
-                        <span id="active-status-tag" class="px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800">配布中</span>
+                        <h2 id="active-title" class="text-2xl md:text-3xl font-black tracking-tight text-notion-text">フロンティアコース</h2>
+                        <span id="active-status-tag" class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800">配布中</span>
                     </div>
-                    <p id="active-desc" class="text-xs text-notion-muted mt-1.5">リアルタイム同期有効: チケット配布時は「-1」「-2」を押してください。</p>
+                    <p id="active-desc" class="text-xs text-notion-muted mt-1.5">メイン会場・研究発表 | ボタンをタップすると全端末のカウントが更新されます。</p>
                 </div>
 
                 <div class="text-right">
-                    <span class="text-xs text-notion-muted block">最終同期時刻</span>
-                    <span id="last-sync-time" class="font-mono text-xs text-gray-500">--:--:--</span>
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-notion-muted block">最新更新時刻</span>
+                    <span id="last-sync-time" class="font-mono text-xs font-bold text-gray-600">--:--:--</span>
                 </div>
             </div>
 
             <!-- Big Remaining Ticket Counter -->
-            <div class="text-center py-4 bg-gray-50/50 rounded-xl border border-gray-100">
-                <span class="text-xs font-semibold text-notion-muted uppercase tracking-wider block mb-1">現在の残り枚数</span>
+            <div id="counter-card" class="text-center py-6 bg-gray-50/80 rounded-2xl border border-gray-200/80 transition-all duration-150">
+                <span class="text-xs font-bold text-notion-muted uppercase tracking-wider block mb-1">現在の残り枚数</span>
                 <div class="flex items-baseline justify-center space-x-2">
-                    <span id="active-remaining" class="text-6xl md:text-7xl font-black font-mono tracking-tight text-gray-900 transition-all">300</span>
-                    <span class="text-lg font-bold text-gray-500">枚</span>
+                    <span id="active-remaining" class="text-7xl md:text-8xl font-black font-mono tracking-tight text-gray-900 transition-all">300</span>
+                    <span class="text-xl font-bold text-gray-500">枚</span>
                 </div>
                 
                 <!-- Progress Bar -->
-                <div class="max-w-md mx-auto mt-4 px-4">
-                    <div class="flex justify-between text-xs text-notion-muted font-mono mb-1.5">
-                        <span>配布済み: <span id="active-issued">0</span> 枚</span>
-                        <span>定員: <span id="active-capacity">300</span> 枚</span>
+                <div class="max-w-md mx-auto mt-5 px-4">
+                    <div class="flex justify-between text-xs text-notion-muted font-mono mb-1.5 font-semibold">
+                        <span>配布済み: <span id="active-issued" class="text-indigo-600 font-bold">0</span> 枚</span>
+                        <span>定員: <span id="active-capacity" class="text-gray-700">300</span> 枚</span>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                        <div id="active-progress" class="bg-indigo-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    <div class="w-full bg-gray-200 rounded-full h-3.5 overflow-hidden shadow-inner">
+                        <div id="active-progress" class="bg-indigo-600 h-3.5 rounded-full transition-all duration-300" style="width: 0%"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Large Action Touch Buttons -->
             <div class="space-y-4">
-                <span class="text-xs font-bold text-notion-muted uppercase tracking-wider block text-center">配布コントロール (タップで即座に反映)</span>
+                <span class="text-xs font-bold text-notion-muted uppercase tracking-wider block text-center">タップで即座に配布カウント (-1, -2)</span>
                 
                 <!-- Primary Distribution Buttons (-1, -2) -->
                 <div class="grid grid-cols-2 gap-4 max-w-lg mx-auto">
-                    <button onclick="modifyCount(-1)" class="touch-action-none group relative bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold py-6 px-4 rounded-xl shadow-md transition-all flex flex-col items-center justify-center space-y-1">
-                        <span class="text-xs font-normal opacity-80">1枚 発行</span>
-                        <span class="text-3xl font-mono tracking-wider">- 1</span>
+                    <button onclick="modifyCount(-1)" class="touch-action-none group active:scale-95 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold py-6 px-4 rounded-2xl shadow-md hover:shadow-lg transition-all flex flex-col items-center justify-center space-y-1">
+                        <span class="text-xs font-normal opacity-90">1枚 発行</span>
+                        <span class="text-4xl font-mono font-black tracking-wider">- 1</span>
                     </button>
 
-                    <button onclick="modifyCount(-2)" class="touch-action-none group relative bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold py-6 px-4 rounded-xl shadow-md transition-all flex flex-col items-center justify-center space-y-1">
-                        <span class="text-xs font-normal opacity-80">2枚 発行 (ペア)</span>
-                        <span class="text-3xl font-mono tracking-wider">- 2</span>
+                    <button onclick="modifyCount(-2)" class="touch-action-none group active:scale-95 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold py-6 px-4 rounded-2xl shadow-md hover:shadow-lg transition-all flex flex-col items-center justify-center space-y-1">
+                        <span class="text-xs font-normal opacity-90">2枚 発行 (ペア)</span>
+                        <span class="text-4xl font-mono font-black tracking-wider">- 2</span>
                     </button>
                 </div>
 
                 <!-- Secondary Correction Buttons (+1, +2) -->
-                <div class="grid grid-cols-2 gap-4 max-w-lg mx-auto pt-2">
-                    <button onclick="modifyCount(+1)" class="touch-action-none bg-white hover:bg-gray-50 active:scale-95 text-gray-700 font-semibold py-2.5 px-3 rounded-lg border border-notion-border shadow-sm transition flex items-center justify-center space-x-1.5 text-xs">
+                <div class="grid grid-cols-2 gap-4 max-w-lg mx-auto pt-1">
+                    <button onclick="modifyCount(+1)" class="touch-action-none active:scale-95 bg-white hover:bg-gray-50 text-gray-700 font-bold py-2.5 px-3 rounded-xl border border-notion-border shadow-2xs transition flex items-center justify-center space-x-1.5 text-xs">
                         <i class="fa-solid fa-rotate-left text-gray-400"></i>
-                        <span>+1枚 修正(戻し)</span>
+                        <span>+1枚 修正 (キャンセル)</span>
                     </button>
-                    <button onclick="modifyCount(+2)" class="touch-action-none bg-white hover:bg-gray-50 active:scale-95 text-gray-700 font-semibold py-2.5 px-3 rounded-lg border border-notion-border shadow-sm transition flex items-center justify-center space-x-1.5 text-xs">
+                    <button onclick="modifyCount(+2)" class="touch-action-none active:scale-95 bg-white hover:bg-gray-50 text-gray-700 font-bold py-2.5 px-3 rounded-xl border border-notion-border shadow-2xs transition flex items-center justify-center space-x-1.5 text-xs">
                         <i class="fa-solid fa-rotate-left text-gray-400"></i>
-                        <span>+2枚 修正(戻し)</span>
+                        <span>+2枚 修正 (キャンセル)</span>
                     </button>
-                </div>
-            </div>
-
-            <!-- Admin Capacity Setting Modal trigger / Quick Accordion -->
-            <div class="border-t border-notion-border pt-4 text-center">
-                <button onclick="toggleAdminPanel()" class="text-xs text-notion-muted hover:text-gray-900 transition">
-                    <i class="fa-solid fa-sliders mr-1"></i> 定員枚数の変更・初期化
-                </button>
-                <div id="admin-panel" class="hidden mt-3 p-3 bg-gray-50 rounded-lg max-w-md mx-auto space-y-3 border border-gray-200">
-                    <div class="flex items-center justify-center space-x-2">
-                        <span class="text-xs font-semibold text-gray-600">定員(上限):</span>
-                        <input type="number" id="input-capacity" class="w-24 px-2 py-1 text-sm border border-gray-300 rounded text-center font-mono" value="300">
-                        <button onclick="updateCapacity()" class="px-3 py-1 bg-gray-800 text-white text-xs rounded hover:bg-black transition">保存</button>
-                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Notion DB Style Summary Table -->
-        <div class="bg-white rounded-xl border border-notion-border shadow-sm overflow-hidden">
+        <div class="bg-white rounded-2xl border border-notion-border shadow-2xs overflow-hidden">
             <div class="px-5 py-4 border-b border-notion-border flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-table-list text-notion-muted"></i>
                     <h3 class="text-sm font-bold text-notion-text">全コース配布状況サマリー</h3>
                 </div>
-                <span class="text-xs text-notion-muted">リアルタイム更新中</span>
+                <div class="flex items-center space-x-2">
+                    <button onclick="exportCSV()" class="text-xs text-gray-600 hover:text-black font-semibold bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-md transition">
+                        <i class="fa-solid fa-download mr-1"></i> CSV出力
+                    </button>
+                </div>
             </div>
 
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs">
-                    <thead class="bg-notion-sidebar text-notion-muted font-medium border-b border-notion-border">
+                    <thead class="bg-notion-sidebar text-notion-muted font-bold border-b border-notion-border">
                         <tr>
-                            <th class="px-4 py-2.5">コース・イベント</th>
-                            <th class="px-4 py-2.5 text-center">状態</th>
-                            <th class="px-4 py-2.5 text-right">残り枚数</th>
-                            <th class="px-4 py-2.5 text-right">配布数 / 定員</th>
-                            <th class="px-4 py-2.5 w-32">進捗</th>
-                            <th class="px-4 py-2.5 text-center">クイック操作</th>
+                            <th class="px-4 py-3">コース・イベント</th>
+                            <th class="px-4 py-3 text-center">状態</th>
+                            <th class="px-4 py-3 text-right">残り枚数</th>
+                            <th class="px-4 py-3 text-right">配布数 / 定員</th>
+                            <th class="px-4 py-3 w-32">進捗</th>
+                            <th class="px-4 py-3 text-center">クイック発行</th>
                         </tr>
                     </thead>
                     <tbody id="summary-table-body" class="divide-y divide-notion-border text-notion-text">
-                        <!-- Dynamic Rows will be rendered here -->
+                        <!-- Dynamic Rows -->
                     </tbody>
                 </table>
             </div>
         </div>
+
+        <!-- Live Action Activity Log -->
+        <div class="bg-white rounded-2xl border border-notion-border shadow-2xs p-4 space-y-3">
+            <div class="flex items-center justify-between text-xs font-bold text-notion-text border-b border-notion-border pb-2.5">
+                <span class="flex items-center"><i class="fa-solid fa-clock-rotate-left mr-1.5 text-indigo-500"></i> リアルタイム更新アクティビティ</span>
+                <span class="text-[10px] text-notion-muted font-normal">全端末の操作履歴が自動反映されます</span>
+            </div>
+            <div id="activity-log-list" class="space-y-1.5 max-h-36 overflow-y-auto text-xs text-notion-muted font-mono">
+                <div class="text-center py-3 text-gray-400">操作履歴はありません</div>
+            </div>
+        </div>
+
     </main>
 
-    <!-- GAS Config Modal -->
-    <div id="gas-config-modal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-notion-border">
+    <!-- Room Modal -->
+    <div id="room-modal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-notion-border">
             <div class="flex justify-between items-center border-b border-notion-border pb-3">
                 <div class="flex items-center space-x-2">
-                    <span class="text-xl">🔗</span>
-                    <h3 class="text-base font-bold text-notion-text">Google Apps Script (GAS) 接続設定</h3>
+                    <span class="text-xl">🏫</span>
+                    <h3 class="text-base font-bold text-notion-text">管理ルームの変更・接続</h3>
                 </div>
-                <button onclick="toggleModal('gas-config-modal')" class="text-gray-400 hover:text-gray-600">
+                <button onclick="toggleModal('room-modal')" class="text-gray-400 hover:text-gray-600">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
 
             <p class="text-xs text-notion-muted leading-relaxed">
-                作成したGoogle Apps Scriptの「ウェブアプリURL」を入力してください。<br>
-                保存すると、スプレッドシートとの自動リアルタイム同期が開始されます。
+                同じ「ルームID」を入力した端末同士でデータが同期されます。文化祭のエリア別や年度ごとに分けたい場合に変更してください。
             </p>
 
             <div class="space-y-2">
-                <label class="text-xs font-bold text-gray-700 block">ウェブアプリ URL (https://script.google.com/macros/s/.../exec)</label>
-                <input type="url" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec" 
-                       class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono">
+                <label class="text-xs font-bold text-gray-700 block">ルームID (半角英数字)</label>
+                <input type="text" id="room-id-input" value="main-room" placeholder="例: main-room, buncasai-2026" 
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono font-bold">
             </div>
 
-            <div id="modal-conn-test-msg" class="text-xs font-medium hidden p-2.5 rounded-lg"></div>
-
             <div class="flex justify-end space-x-2 pt-2">
-                <button onclick="toggleModal('gas-config-modal')" class="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition">キャンセル</button>
-                <button onclick="saveGasUrl()" class="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-sm">設定を保存 & 接続確認</button>
+                <button onclick="toggleModal('room-modal')" class="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition">キャンセル</button>
+                <button onclick="changeRoom()" class="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-2xs">切替 & 同期開始</button>
             </div>
         </div>
     </div>
 
-    <!-- GAS Script Help Modal -->
-    <div id="gas-script-modal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-notion-border max-h-[90vh] flex flex-col">
+    <!-- Admin Settings Modal -->
+    <div id="admin-modal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-notion-border">
             <div class="flex justify-between items-center border-b border-notion-border pb-3">
                 <div class="flex items-center space-x-2">
-                    <span class="text-xl">📋</span>
-                    <h3 class="text-base font-bold text-notion-text">Google Apps Script (GAS) 用コード</h3>
+                    <span class="text-xl">⚙️</span>
+                    <h3 class="text-base font-bold text-notion-text">定員設定 & 一括リセット</h3>
                 </div>
-                <button onclick="toggleModal('gas-script-modal')" class="text-gray-400 hover:text-gray-600">
+                <button onclick="toggleModal('admin-modal')" class="text-gray-400 hover:text-gray-600">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
 
-            <p class="text-xs text-notion-muted">
-                スプレッドシートの「拡張機能」>「Apps Script」に以下のコードを貼り付けてデプロイしてください。<br>
-                ※デプロイ時のアクセス設定は <b>「全員 (Anyone)」</b> に設定してください。
-            </p>
+            <div class="space-y-4">
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
+                    <h4 class="text-xs font-bold text-gray-700 flex items-center">
+                        <i class="fa-solid fa-sliders mr-1.5 text-indigo-600"></i> 各コースの定員(上限枚数)設定
+                    </h4>
+                    <div id="admin-capacity-inputs" class="space-y-2 text-xs">
+                        <!-- Dynamic capacity inputs -->
+                    </div>
+                </div>
 
-            <div class="relative flex-1 overflow-hidden rounded-lg border border-gray-200">
-                <textarea id="gas-code-textarea" readonly class="w-full h-64 p-3 font-mono text-[11px] bg-gray-900 text-gray-100 rounded-lg resize-none focus:outline-none">
-function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = getSheetData(sheet);
-  return ContentService.createTextOutput(JSON.stringify({ status: "success", data: data }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var contents = JSON.parse(e.postData.contents);
-    
-    if (contents.action === "update") {
-      updateTicketCount(sheet, contents.courseId, contents.delta);
-    }
-    
-    var data = getSheetData(sheet);
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: data }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function getSheetData(sheet) {
-  var values = sheet.getDataRange().getValues();
-  if (values.length <= 1) {
-    initDefaultData(sheet);
-    values = sheet.getDataRange().getValues();
-  }
-  var result = {};
-  for (var i = 1; i < values.length; i++) {
-    var id = values[i][0];
-    if (id) {
-      result[id] = {
-        capacity: Number(values[i][1]) || 300,
-        issued: Number(values[i][2]) || 0
-      };
-    }
-  }
-  return result;
-}
-
-function updateTicketCount(sheet, courseId, delta) {
-  var values = sheet.getDataRange().getValues();
-  for (var i = 1; i < values.length; i++) {
-    if (values[i][0] === courseId) {
-      var currentIssued = Number(values[i][2]) || 0;
-      var newIssued = Math.max(0, currentIssued - delta); // delta negative means issuing
-      sheet.getRange(i + 1, 3).setValue(newIssued);
-      return;
-    }
-  }
-}
-
-function initDefaultData(sheet) {
-  sheet.clear();
-  sheet.appendRow(["CourseID", "Capacity", "Issued"]);
-  sheet.appendRow(["frontier", 300, 0]);
-  sheet.appendRow(["bunri", 300, 0]);
-  sheet.appendRow(["ishin", 300, 0]);
-  sheet.appendRow(["kokusai_am", 300, 0]);
-  sheet.appendRow(["kokusai_pm", 300, 0]);
-}</textarea>
+                <div class="border-t border-notion-border pt-3 space-y-2">
+                    <span class="text-xs font-bold text-rose-600 block">⚠️️ データの初期化 (全員に即時反映)</span>
+                    <div class="flex gap-2">
+                        <button onclick="resetActiveCourse()" class="flex-1 py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg border border-rose-200 transition">
+                            現在のコース配布数を 0 にリセット
+                        </button>
+                        <button onclick="resetAllCourses()" class="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition shadow-2xs">
+                            全コースを 0 にリセット
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <div class="flex justify-between items-center pt-2">
-                <span id="copy-confirm" class="text-xs text-emerald-600 font-semibold hidden"><i class="fa-solid fa-check"></i> クリップボードにコピーしました</span>
-                <button onclick="copyGasCode()" class="px-4 py-2 text-xs font-medium bg-gray-800 hover:bg-black text-white rounded-lg transition ml-auto shadow-sm">
-                    <i class="fa-regular fa-copy mr-1"></i> コードをコピー
-                </button>
+            <div class="flex justify-end pt-2">
+                <button onclick="saveAdminCapacitySettings()" class="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-2xs">設定を保存</button>
             </div>
         </div>
     </div>
 
-    <script>
-        // Data Store State Definition
-        const COURSES = {
-            frontier: { id: 'frontier', icon: '🚀', name: 'フロンティアコース', desc: 'メインイベント', capacity: 300, issued: 0 },
-            bunri: { id: 'bunri', icon: '💡', name: '文理共創コース', desc: '探究プレゼンテーション', capacity: 300, issued: 0 },
-            ishin: { id: 'ishin', icon: '🧬', name: '医進・サイエンスコース', desc: '実験室体験ワークショップ', capacity: 300, issued: 0 },
-            kokusai_am: { id: 'kokusai_am', icon: '🌐', name: '国際教養コース (午前の部)', desc: '第1部 / 英語プレゼンテーション', capacity: 300, issued: 0 },
-            kokusai_pm: { id: 'kokusai_pm', icon: '🌐', name: '国際教養コース (午後の部)', desc: '第2部 / 英語プレゼンテーション', capacity: 300, issued: 0 }
+    <!-- Firebase Standard Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration & Context Setup
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'ticket-distribution-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDemoKeyForTesting123456789",
+            authDomain: "demo-app.firebaseapp.com",
+            projectId: "demo-app",
+            storageBucket: "demo-app.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:demo"
         };
 
-        let activeCourseId = 'frontier';
-        let gasUrl = localStorage.getItem('gas_url') || '';
-        let pollingTimer = null;
-        let isSyncing = false;
+        // Course Base Definition
+        const DEFAULT_COURSES = {
+            frontier: { id: 'frontier', icon: '🚀', name: 'フロンティアコース', desc: 'メイン会場・研究発表', capacity: 300, issued: 0 },
+            bunri: { id: 'bunri', icon: '💡', name: '文理共創コース', desc: '探究プレゼンテーション', capacity: 300, issued: 0 },
+            ishin: { id: 'ishin', icon: '🧬', name: '医進・サイエンスコース', desc: '科学実験ワークショップ', capacity: 300, issued: 0 },
+            kokusai_am: { id: 'kokusai_am', icon: '🌐', name: '国際教養 (午前の部)', desc: '第1部 英語スピーチ', capacity: 300, issued: 0 },
+            kokusai_pm: { id: 'kokusai_pm', icon: '🌐', name: '国際教養 (午後の部)', desc: '第2部 ディベート発表', capacity: 300, issued: 0 }
+        };
 
-        // Initialize Application
-        window.addEventListener('DOMContentLoaded', () => {
-            loadLocalCache();
-            if (gasUrl) {
-                document.getElementById('gas-url-input').value = gasUrl;
-                startPolling();
-            } else {
-                updateConnectionStatus('unconfigured', '接続設定未完了');
+        // Application State
+        window.COURSES = JSON.parse(JSON.stringify(DEFAULT_COURSES));
+        window.activeCourseId = 'frontier';
+        window.currentRoomId = 'main-room';
+        window.soundEnabled = true;
+        window.recentLogs = [];
+        
+        let app, auth, db;
+        let currentUser = null;
+        let unsubscribeRoomListener = null;
+
+        // Sound Synthesizer via Web Audio API
+        window.playAudioFeedback = function(type = 'issue') {
+            if (!window.soundEnabled) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'issue') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(880, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.12);
+                } else if (type === 'undo') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(350, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.15);
+                }
+            } catch(e) {
+                console.log("Audio not allowed yet", e);
             }
-            renderUI();
-        });
+        };
 
-        function selectCourse(courseId) {
-            if (COURSES[courseId]) {
-                activeCourseId = courseId;
-                renderUI();
+        window.triggerVibration = function(ms = 35) {
+            if (navigator.vibrate) {
+                try { navigator.vibrate(ms); } catch(e){}
+            }
+        };
+
+        // Initialize Firebase
+        async function initFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Authentication Rule Implementation
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    const userCredential = await signInWithCustomToken(auth, __initial_auth_token);
+                    currentUser = userCredential.user;
+                } else {
+                    const userCredential = await signInAnonymously(auth);
+                    currentUser = userCredential.user;
+                }
+
+                updateStatusBadge('connected', 'リアルタイム接続完了');
+                connectToRoom(window.currentRoomId);
+            } catch (err) {
+                console.warn("Firebase fallback to local BroadcastChannel:", err);
+                updateStatusBadge('local', 'ローカル(同一ブラウザ)同期中');
+                setupBroadcastChannel();
             }
         }
 
-        function renderUI() {
-            const course = COURSES[activeCourseId];
-            const remaining = Math.max(0, course.capacity - course.issued);
-            const progressPct = Math.min(100, Math.round((course.issued / course.capacity) * 100));
+        // Listen to Firestore Room Document
+        function connectToRoom(roomId) {
+            if (!db || !currentUser) return;
 
-            // Tab Styles update
-            Object.keys(COURSES).forEach(id => {
+            if (unsubscribeRoomListener) {
+                unsubscribeRoomListener();
+            }
+
+            // Path Mandate: /artifacts/{appId}/public/data/{collectionName}
+            const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'ticket_rooms', roomId);
+
+            unsubscribeRoomListener = onSnapshot(roomDocRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    if (data && data.courses) {
+                        Object.keys(data.courses).forEach(id => {
+                            if (window.COURSES[id]) {
+                                window.COURSES[id].capacity = data.courses[id].capacity || window.COURSES[id].capacity;
+                                window.COURSES[id].issued = data.courses[id].issued || 0;
+                            }
+                        });
+                    }
+                    if (data && data.logs) {
+                        window.recentLogs = data.logs || [];
+                    }
+                    renderUI();
+                    document.getElementById('last-sync-time').innerText = new Date().toLocaleTimeString();
+                } else {
+                    // Initialize New Room Document
+                    saveRoomDataToFirebase(roomId, window.COURSES, window.recentLogs);
+                }
+            }, (error) => {
+                console.error("Firestore snapshot error:", error);
+                updateStatusBadge('error', '再接続中...');
+            });
+        }
+
+        // Save State to Firestore
+        async function saveRoomDataToFirebase(roomId, coursesData, logsData) {
+            if (!db || !currentUser) return;
+
+            const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'ticket_rooms', roomId);
+            const coursesPayload = {};
+            Object.keys(coursesData).forEach(id => {
+                coursesPayload[id] = {
+                    capacity: coursesData[id].capacity,
+                    issued: coursesData[id].issued
+                };
+            });
+
+            try {
+                await setDoc(roomDocRef, {
+                    courses: coursesPayload,
+                    logs: logsData.slice(0, 15), // keep last 15 logs
+                    lastUpdated: Date.now(),
+                    updatedBy: currentUser.uid
+                }, { merge: true });
+            } catch(e) {
+                console.error("Error saving to Firestore:", e);
+            }
+        }
+
+        // BroadcastChannel Fallback for offline or restricted environments
+        let localBC = null;
+        function setupBroadcastChannel() {
+            try {
+                localBC = new BroadcastChannel('ticket_sync_' + window.currentRoomId);
+                localBC.onmessage = (event) => {
+                    if (event.data && event.data.courses) {
+                        window.COURSES = event.data.courses;
+                        window.recentLogs = event.data.logs || [];
+                        renderUI();
+                        document.getElementById('last-sync-time').innerText = new Date().toLocaleTimeString();
+                    }
+                };
+            } catch(e) {}
+        }
+
+        function broadcastLocalChange() {
+            if (localBC) {
+                localBC.postMessage({
+                    courses: window.COURSES,
+                    logs: window.recentLogs
+                });
+            }
+        }
+
+        // Global Ticket Modifier
+        window.modifyCountForCourse = function(courseId, delta) {
+            const course = window.COURSES[courseId];
+            if (!course) return;
+
+            const newIssued = Math.max(0, course.issued - delta); // delta negative means issuing
+            if (newIssued > course.capacity) return; // Cap at max
+
+            course.issued = newIssued;
+
+            // Add activity log
+            const timeStr = new Date().toLocaleTimeString();
+            const changeStr = delta < 0 ? `${Math.abs(delta)}枚 発行` : `${delta}枚 修正`;
+            const logEntry = {
+                time: timeStr,
+                text: `${course.name}: ${changeStr} (残 ${course.capacity - newIssued}枚)`
+            };
+            window.recentLogs.unshift(logEntry);
+
+            // Play audio & vibration
+            window.playAudioFeedback(delta < 0 ? 'issue' : 'undo');
+            window.triggerVibration();
+
+            // Optimistic Local UI update
+            renderUI();
+
+            // Sync globally
+            if (db && currentUser) {
+                saveRoomDataToFirebase(window.currentRoomId, window.COURSES, window.recentLogs);
+            } else {
+                broadcastLocalChange();
+            }
+        };
+
+        window.modifyCount = function(delta) {
+            window.modifyCountForCourse(window.activeCourseId, delta);
+        };
+
+        // Window exposed functions for UI controls
+        window.selectCourse = function(courseId) {
+            if (window.COURSES[courseId]) {
+                window.activeCourseId = courseId;
+                renderUI();
+            }
+        };
+
+        window.toggleModal = function(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden');
+            if (id === 'admin-modal') renderAdminInputs();
+        };
+
+        window.openRoomModal = function() {
+            document.getElementById('room-id-input').value = window.currentRoomId;
+            window.toggleModal('room-modal');
+        };
+
+        window.changeRoom = function() {
+            const newRoom = document.getElementById('room-id-input').value.trim() || 'main-room';
+            window.currentRoomId = newRoom;
+            document.getElementById('current-room-display').innerText = `ルーム: ${newRoom}`;
+            window.toggleModal('room-modal');
+            
+            if (db && currentUser) {
+                connectToRoom(newRoom);
+            } else {
+                setupBroadcastChannel();
+            }
+        };
+
+        window.toggleSound = function() {
+            window.soundEnabled = !window.soundEnabled;
+            const btnText = document.getElementById('sound-status-text');
+            if (btnText) btnText.innerText = window.soundEnabled ? '音: ON' : '音: OFF';
+        };
+
+        // UI Render Pipeline
+        function renderUI() {
+            const active = window.COURSES[window.activeCourseId];
+            if (!active) return;
+
+            const remaining = Math.max(0, active.capacity - active.issued);
+            const progressPct = Math.min(100, Math.round((active.issued / active.capacity) * 100));
+
+            // Course Tabs
+            Object.keys(window.COURSES).forEach(id => {
                 const btn = document.getElementById(`tab-${id}`);
                 const badge = document.getElementById(`badge-${id}`);
-                const c = COURSES[id];
+                const c = window.COURSES[id];
                 const rem = Math.max(0, c.capacity - c.issued);
 
                 if (badge) badge.innerText = rem;
 
-                if (id === activeCourseId) {
-                    btn.className = "tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm flex items-center justify-center space-x-1.5 transition whitespace-nowrap";
-                } else {
-                    btn.className = "tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 flex items-center justify-center space-x-1.5 transition whitespace-nowrap";
+                if (btn) {
+                    if (id === window.activeCourseId) {
+                        btn.className = "tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs flex items-center justify-center space-x-1.5 transition whitespace-nowrap";
+                    } else {
+                        btn.className = "tab-btn flex-1 min-w-[130px] px-3 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 flex items-center justify-center space-x-1.5 transition whitespace-nowrap";
+                    }
                 }
             });
 
-            // Main Active Card Update
-            document.getElementById('active-icon').innerText = course.icon;
-            document.getElementById('active-title').innerText = course.name;
-            document.getElementById('active-desc').innerText = course.desc;
+            // Main Dashboard Card
+            document.getElementById('active-icon').innerText = active.icon;
+            document.getElementById('active-title').innerText = active.name;
+            document.getElementById('active-desc').innerText = active.desc;
             document.getElementById('active-remaining').innerText = remaining;
-            document.getElementById('active-issued').innerText = course.issued;
-            document.getElementById('active-capacity').innerText = course.capacity;
+            document.getElementById('active-issued').innerText = active.issued;
+            document.getElementById('active-capacity').innerText = active.capacity;
             document.getElementById('active-progress').style.width = `${progressPct}%`;
-            document.getElementById('input-capacity').value = course.capacity;
 
-            // Status Tag
+            // Visual Status Badge
             const tag = document.getElementById('active-status-tag');
             if (remaining === 0) {
                 tag.innerText = "完売";
@@ -440,31 +641,34 @@ function initDefaultData(sheet) {
                 tag.className = "px-2.5 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-800";
             } else {
                 tag.innerText = "配布中";
-                tag.className = "px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800";
+                tag.className = "px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800";
             }
 
-            // Render Table
+            // Summary Table
             renderSummaryTable();
+
+            // Activity Log
+            renderActivityLogs();
         }
 
         function renderSummaryTable() {
             const tbody = document.getElementById('summary-table-body');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
-            Object.values(COURSES).forEach(c => {
+            Object.values(window.COURSES).forEach(c => {
                 const remaining = Math.max(0, c.capacity - c.issued);
                 const pct = Math.min(100, Math.round((c.issued / c.capacity) * 100));
-                
+
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-notion-sidebar transition cursor-pointer";
                 tr.onclick = (e) => {
-                    // Prevent switching tab if clicking quick action buttons
                     if (!e.target.closest('button')) {
-                        selectCourse(c.id);
+                        window.selectCourse(c.id);
                     }
                 };
 
-                let statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">配布中</span>`;
+                let statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">配布中</span>`;
                 if (remaining === 0) {
                     statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">完売</span>`;
                 } else if (remaining <= 20) {
@@ -472,22 +676,22 @@ function initDefaultData(sheet) {
                 }
 
                 tr.innerHTML = `
-                    <td class="px-4 py-3 font-semibold flex items-center space-x-2">
+                    <td class="px-4 py-3 font-bold flex items-center space-x-2">
                         <span>${c.icon}</span>
                         <span>${c.name}</span>
                     </td>
                     <td class="px-4 py-3 text-center">${statusBadge}</td>
                     <td class="px-4 py-3 text-right font-mono font-bold text-sm ${remaining === 0 ? 'text-rose-600' : 'text-gray-900'}">${remaining}</td>
-                    <td class="px-4 py-3 text-right font-mono text-gray-500">${c.issued} / ${c.capacity}</td>
+                    <td class="px-4 py-3 text-right font-mono text-gray-500 font-medium">${c.issued} / ${c.capacity}</td>
                     <td class="px-4 py-3">
                         <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-indigo-600 h-2 rounded-full" style="width: ${pct}%"></div>
+                            <div class="bg-indigo-600 h-2 rounded-full transition-all duration-200" style="width: ${pct}%"></div>
                         </div>
                     </td>
                     <td class="px-4 py-3 text-center">
                         <div class="inline-flex space-x-1">
-                            <button onclick="modifyCountForCourse('${c.id}', -1)" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono font-bold rounded text-xs transition border border-indigo-200">-1</button>
-                            <button onclick="modifyCountForCourse('${c.id}', -2)" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono font-bold rounded text-xs transition border border-indigo-200">-2</button>
+                            <button onclick="modifyCountForCourse('${c.id}', -1)" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-mono font-bold rounded-md text-xs transition border border-indigo-200 shadow-2xs">-1</button>
+                            <button onclick="modifyCountForCourse('${c.id}', -2)" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-mono font-bold rounded-md text-xs transition border border-indigo-200 shadow-2xs">-2</button>
                         </div>
                     </td>
                 `;
@@ -495,191 +699,123 @@ function initDefaultData(sheet) {
             });
         }
 
-        function modifyCount(delta) {
-            modifyCountForCourse(activeCourseId, delta);
-        }
+        function renderActivityLogs() {
+            const container = document.getElementById('activity-log-list');
+            if (!container) return;
 
-        function modifyCountForCourse(courseId, delta) {
-            const course = COURSES[courseId];
-            if (!course) return;
-
-            // Trigger touch vibration if available on mobile
-            if (window.navigator && window.navigator.vibrate) {
-                window.navigator.vibrate(40);
+            if (window.recentLogs.length === 0) {
+                container.innerHTML = `<div class="text-center py-3 text-gray-400">操作履歴はありません</div>`;
+                return;
             }
 
-            // Update local state immediately for responsive feel
-            const newIssued = Math.max(0, course.issued - delta); // delta negative means issuing tickets
-            if (newIssued > course.capacity) return; // Prevent exceeding capacity
+            container.innerHTML = window.recentLogs.slice(0, 10).map(log => `
+                <div class="flex items-center justify-between py-1 border-b border-gray-100 last:border-0">
+                    <span class="text-gray-700">${log.text}</span>
+                    <span class="text-[10px] text-gray-400">${log.time}</span>
+                </div>
+            `).join('');
+        }
 
-            course.issued = newIssued;
-            saveLocalCache();
+        // Admin Capacity Management
+        function renderAdminInputs() {
+            const container = document.getElementById('admin-capacity-inputs');
+            if (!container) return;
+            container.innerHTML = '';
+
+            Object.values(window.COURSES).forEach(c => {
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between bg-white p-2 rounded-lg border border-gray-200";
+                div.innerHTML = `
+                    <span class="font-bold text-gray-700">${c.icon} ${c.name}</span>
+                    <div class="flex items-center space-x-1.5">
+                        <span class="text-gray-500 font-medium text-[11px]">定員:</span>
+                        <input type="number" id="cap-input-${c.id}" value="${c.capacity}" class="w-20 px-2 py-1 border border-gray-300 rounded font-mono font-bold text-center">
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.saveAdminCapacitySettings = function() {
+            Object.keys(window.COURSES).forEach(id => {
+                const input = document.getElementById(`cap-input-${id}`);
+                if (input) {
+                    const val = parseInt(input.value, 10);
+                    if (!isNaN(val) && val >= 0) {
+                        window.COURSES[id].capacity = val;
+                    }
+                }
+            });
+            window.toggleModal('admin-modal');
             renderUI();
 
-            // Send to GAS
-            if (gasUrl) {
-                sendUpdateToGAS(courseId, delta);
-            }
-        }
-
-        function updateCapacity() {
-            const val = parseInt(document.getElementById('input-capacity').value, 10);
-            if (!isNaN(val) && val > 0) {
-                COURSES[activeCourseId].capacity = val;
-                saveLocalCache();
-                renderUI();
-                toggleAdminPanel();
-            }
-        }
-
-        function toggleAdminPanel() {
-            const p = document.getElementById('admin-panel');
-            p.classList.toggle('hidden');
-        }
-
-        async function fetchFromGAS() {
-            if (!gasUrl || isSyncing) return;
-            isSyncing = true;
-            updateConnectionStatus('syncing', '同期中...');
-
-            try {
-                const res = await fetch(gasUrl, { method: 'GET' });
-                if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-                
-                const json = await res.json();
-                if (json.status === 'success' && json.data) {
-                    // Update local store with GAS values
-                    Object.keys(json.data).forEach(id => {
-                        if (COURSES[id]) {
-                            COURSES[id].capacity = json.data[id].capacity || COURSES[id].capacity;
-                            COURSES[id].issued = json.data[id].issued || 0;
-                        }
-                    });
-                    saveLocalCache();
-                    renderUI();
-                    updateConnectionStatus('connected', '接続完了 (同期中)');
-                    hideErrorBanner();
-                } else {
-                    throw new Error(json.message || 'データ形式が不適切です');
-                }
-            } catch (err) {
-                console.error("GAS Sync Error:", err);
-                updateConnectionStatus('error', '通信エラー');
-                showErrorBanner(`Google Apps Scriptとの通信に失敗しました: ${err.message}`);
-            } finally {
-                isSyncing = false;
-                document.getElementById('last-sync-time').innerText = new Date().toLocaleTimeString();
-            }
-        }
-
-        async function sendUpdateToGAS(courseId, delta) {
-            if (!gasUrl) return;
-
-            try {
-                // Using text/plain to avoid CORS preflight options issues with GAS
-                await fetch(gasUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({
-                        action: 'update',
-                        courseId: courseId,
-                        delta: delta
-                    })
-                });
-                fetchFromGAS(); // Refresh after update
-            } catch (err) {
-                console.error("GAS Post Error:", err);
-                showErrorBanner(`変更の送信中にエラーが発生しました: ${err.message}`);
-            }
-        }
-
-        function startPolling() {
-            fetchFromGAS();
-            if (pollingTimer) clearInterval(pollingTimer);
-            pollingTimer = setInterval(fetchFromGAS, 3000); // 3-second polling interval
-        }
-
-        function saveGasUrl() {
-            const url = document.getElementById('gas-url-input').value.trim();
-            if (url) {
-                gasUrl = url;
-                localStorage.setItem('gas_url', gasUrl);
-                toggleModal('gas-config-modal');
-                startPolling();
+            if (db && currentUser) {
+                saveRoomDataToFirebase(window.currentRoomId, window.COURSES, window.recentLogs);
             } else {
-                localStorage.removeItem('gas_url');
-                gasUrl = '';
-                if (pollingTimer) clearInterval(pollingTimer);
-                updateConnectionStatus('unconfigured', '接続設定未完了');
-                toggleModal('gas-config-modal');
+                broadcastLocalChange();
             }
-        }
+        };
 
-        function updateConnectionStatus(type, text) {
+        window.resetActiveCourse = function() {
+            const c = window.COURSES[window.activeCourseId];
+            if (c) {
+                c.issued = 0;
+                renderUI();
+                if (db && currentUser) saveRoomDataToFirebase(window.currentRoomId, window.COURSES, window.recentLogs);
+                window.toggleModal('admin-modal');
+            }
+        };
+
+        window.resetAllCourses = function() {
+            Object.keys(window.COURSES).forEach(id => {
+                window.COURSES[id].issued = 0;
+            });
+            renderUI();
+            if (db && currentUser) saveRoomDataToFirebase(window.currentRoomId, window.COURSES, window.recentLogs);
+            window.toggleModal('admin-modal');
+        };
+
+        window.exportCSV = function() {
+            let csv = "\uFEFFコースID,コース名,定員,配布数,残り枚数,進捗率(%)\n";
+            Object.values(window.COURSES).forEach(c => {
+                const remaining = Math.max(0, c.capacity - c.issued);
+                const pct = Math.min(100, Math.round((c.issued / c.capacity) * 100));
+                csv += `"${c.id}","${c.name}",${c.capacity},${c.issued},${remaining},${pct}%\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `入場券配布集計報告_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        function updateStatusBadge(type, text) {
             const badge = document.getElementById('status-badge');
             const dot = document.getElementById('status-dot');
             const statusText = document.getElementById('status-text');
 
-            statusText.innerText = text;
+            if (statusText) statusText.innerText = text;
 
             if (type === 'connected') {
-                badge.className = "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800";
-                dot.className = "w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse-subtle";
-            } else if (type === 'syncing') {
-                badge.className = "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800";
-                dot.className = "w-2 h-2 rounded-full bg-blue-500 mr-1.5 animate-spin";
-            } else if (type === 'error') {
-                badge.className = "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800";
-                dot.className = "w-2 h-2 rounded-full bg-rose-500 mr-1.5";
+                badge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all";
+                dot.className = "w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse";
+            } else if (type === 'local') {
+                badge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200 transition-all";
+                dot.className = "w-2 h-2 rounded-full bg-blue-500 mr-1.5";
             } else {
-                badge.className = "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700";
-                dot.className = "w-2 h-2 rounded-full bg-gray-400 mr-1.5";
+                badge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200 transition-all";
+                dot.className = "w-2 h-2 rounded-full bg-amber-500 mr-1.5";
             }
         }
 
-        function showErrorBanner(msg) {
-            document.getElementById('error-banner-msg').innerText = msg;
-            document.getElementById('error-banner').classList.remove('hidden');
-        }
-
-        function hideErrorBanner() {
-            document.getElementById('error-banner').classList.add('hidden');
-        }
-
-        function toggleModal(id) {
-            document.getElementById(id).classList.toggle('hidden');
-        }
-
-        function saveLocalCache() {
-            localStorage.setItem('ticket_courses_data', JSON.stringify(COURSES));
-        }
-
-        function loadLocalCache() {
-            const cached = localStorage.getItem('ticket_courses_data');
-            if (cached) {
-                try {
-                    const parsed = JSON.parse(cached);
-                    Object.keys(parsed).forEach(id => {
-                        if (COURSES[id]) {
-                            COURSES[id].capacity = parsed[id].capacity;
-                            COURSES[id].issued = parsed[id].issued;
-                        }
-                    });
-                } catch (e) {
-                    console.error("Failed to parse cache", e);
-                }
-            }
-        }
-
-        function copyGasCode() {
-            const textarea = document.getElementById('gas-code-textarea');
-            textarea.select();
-            document.execCommand('copy');
-            
-            const msg = document.getElementById('copy-confirm');
-            msg.classList.remove('hidden');
-            setTimeout(() => msg.classList.add('hidden'), 2500);
-        }
+        // Initialize App on DOM Load
+        window.addEventListener('DOMContentLoaded', () => {
+            renderUI();
+            initFirebase();
+        });
     </script>
 </body>
 </html>
